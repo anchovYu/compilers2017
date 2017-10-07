@@ -31,25 +31,28 @@ void adjust(void)
  */
 char *getstr(const char *str)
 {
-	//optional: implement this function if you need it
+	// not implemented
     return NULL;
 }
 
+/* variable for string storage.
+ * @parameter max length
+ */
 char stringBuf[1024];
 int stringPos = 0;
 
 int commentLayer = 0; /* TODO: change a name */
 
 %}
-  /* You can add lex definitions here. */
-digits [0-9]+
-%Start COMMENT STRINGEXP
-%%
-  /*
-  * Below is an example, which you can wipe out
-  * and write reguler expressions and actions of your own.
-  */
+/* lex definitions */
 
+/* digit RE */
+digits [0-9]+
+/* comment and string state */
+%Start COMMENT STRINGEXP
+
+%%
+    /* initial states, basic symbols */
 <INITIAL>","        {adjust(); return COMMA;}
 <INITIAL>":"        {adjust(); return COLON;}
 <INITIAL>";"        {adjust(); return SEMICOLON;}
@@ -74,6 +77,7 @@ digits [0-9]+
 <INITIAL>"|"        {adjust(); return OR;}
 <INITIAL>":="       {adjust(); return ASSIGN;}
 
+    /* initial states, reserved words */
 <INITIAL>array      {adjust(); return ARRAY;}
 <INITIAL>if         {adjust(); return IF;}
 <INITIAL>then       {adjust(); return THEN;}
@@ -92,19 +96,35 @@ digits [0-9]+
 <INITIAL>var        {adjust(); return VAR;}
 <INITIAL>type       {adjust(); return TYPE;}
 
+    /* initial states, variables */
 <INITIAL>[a-zA-Z][a-zA-Z0-9"_"]*    {adjust(); yylval.sval=String(yytext); return ID;}
+
+    /* initial states, int */
 <INITIAL>{digits}   {adjust(); yylval.ival=atoi(yytext); return INT;}
 
+    /* initial states, comment */
 <INITIAL>"/*"       {adjust(); commentLayer ++; BEGIN COMMENT;}
+
+    /* initial states, string */
 <INITIAL>"\""       {adjust(); BEGIN STRINGEXP;}
+
+    /* initial states, space */
 <INITIAL>(" "|"\t")+ {adjust();}
 <INITIAL>"\n"       {adjust(); EM_newline(); continue;}
+
+    /* initial states, error */
 <INITIAL>.          {adjust(); EM_error(EM_tokPos, "illegal character");}
 
+
+    /* comment states, end comment */
 <COMMENT>"*/"       {adjust(); commentLayer --; if (commentLayer == 0) BEGIN INITIAL;}
+    /* comment states, nested comment */
 <COMMENT>"/*"       {adjust(); commentLayer ++;}
+    /* comment states, ignore comment */
 <COMMENT>.          {adjust();}
 
+
+    /* string states, end string */
 <STRINGEXP>"\""     {charPos+=yyleng;
                      stringBuf[stringPos] = '\0';
                      if (strlen(stringBuf) == 0)
@@ -114,7 +134,13 @@ digits [0-9]+
                      stringPos = 0;
                      BEGIN INITIAL;
                      return STRING;}
+    /* string states, special char */
+    /* TODO: add more. */
 <STRINGEXP>"\\n"    {charPos+=yyleng; stringBuf[stringPos++] = '\n';}
-<STRINGEXP>.        {charPos+=yyleng; stringBuf[stringPos++] = yytext[0]; }
+<STRINGEXP>"\\t"    {charPos+=yyleng; stringBuf[stringPos++] = '\t';}
+    /* string states, other char */
+<STRINGEXP>.        {charPos+=yyleng; stringBuf[stringPos++] = yytext[0];}
+
+
 "\n"                {adjust(); EM_newline(); continue;}
 .                   {BEGIN INITIAL; yyless(1);}
