@@ -52,6 +52,7 @@ void yyerror(char *s)
   BREAK NIL
   FUNCTION VAR TYPE
 
+%nonassoc THEN ELSE DO OF   /* hacking */
 %nonassoc ASSIGN
 %left OR
 %left AND
@@ -83,7 +84,16 @@ exp     :   LPAREN expseq RPAREN
         |   letexp
         ;
 
+/* Difference between expseq and explist in nonterminal:
+ * (exp;exp) => expseq
+ * let decs in exp;exp end => expseq
+ * func(exp,exp) => explist
+ */
 expseq  :   exp SEMICOLON expseq
+        |   exp
+        ;
+
+explist :   exp COMMA explist
         |   exp
         ;
 
@@ -96,10 +106,7 @@ fieldvar     :  lvalue DOT ID;
 subscriptvar :  lvalue LBRACK exp RBRACK;
 
 callexp :   ID LPAREN RPAREN
-        |   ID LPAREN expin RPAREN
-        ;
-expin   :   exp COMMA expin
-        |   exp
+        |   ID LPAREN explist RPAREN
         ;
 
 opexp   :   exp PLUS exp
@@ -136,35 +143,41 @@ ifexp   :   IF exp THEN exp ELSE exp
 
 whileexp:   WHILE exp DO exp;
 
-forexp  :   FOR assignexp TO exp DO exp;
+forexp  :   FOR ID ASSIGN exp TO exp DO exp;
 
 letexp  :   LET decs IN expseq END;
 
 decs    :   dec decs
         |
         ;
-
 dec     :   vardec
-        |   fundec
-        |   tydec
+        |   fundecs
+        |   tydecs
         ;
 
 vardec  :   VAR ID ASSIGN exp
         |   VAR ID COLON ID ASSIGN exp
         ;
 
+fundecs :   fundec fundecs
+        |   fundec
+        ;
 fundec  :   FUNCTION ID LPAREN tyfields RPAREN EQ exp
         |   FUNCTION ID LPAREN tyfields RPAREN COLON ID EQ exp
         ;
-tyfields:
-        |   tyfields_nonempty
-        ;
-tyfields_nonempty   :   ID COLON ID COMMA tyfields
-                    |   ID COLON ID
-                    ;
 
+tydecs  :   tydec tydecs
+        |   tydec
+        ;
 tydec   :   TYPE ID EQ ty;
 ty      :   ID
         |   LBRACE tyfields RBRACE
         |   ARRAY OF ID
         ;
+tyfields:
+        |   tyfields_nonempty
+        ;
+tyfields_nonempty   :   field COMMA tyfields_nonempty
+                    |   field
+                    ;
+field   :   ID COLON ID;
