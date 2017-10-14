@@ -15,28 +15,6 @@ void yyerror(char *s)
 }
 %}
 
-
-%union {
-	int pos;
-	int ival;
-	string sval;
-	A_exp exp;
-	A_expList explist;
-	A_var var;
-	A_decList declist;
-	A_dec  dec;
-	A_efieldList efieldlist;
-	A_efield  efield;
-	A_namety namety;
-	A_nametyList nametylist;
-	A_fieldList fieldlist;
-	A_field field;
-	A_fundecList fundeclist;
-	A_fundec fundec;
-	A_ty ty;
-	}
-
-
 %union {
 	int pos;
 	int ival;
@@ -74,22 +52,6 @@ void yyerror(char *s)
   BREAK NIL
   FUNCTION VAR TYPE
 
-%type <exp> exp expseq
-%type <explist> actuals  nonemptyactuals sequencing  sequencing_exps
-
-%type <var>  lvalue one oneormore
-
-%type <declist> decs decs_nonempty
-%type <dec>  decs_nonempty_s vardec
-%type <efieldlist> rec rec_nonempty
-%type <efield> rec_one
-%type <nametylist> tydec
-%type <namety>  tydec_one
-%type <fieldlist> tyfields tyfields_nonempty
-%type <ty> ty
-%type <fundeclist> fundec
-%type <fundec> fundec_one
-
 %left OR
 %left AND
 %nonassoc EQ NEQ
@@ -101,24 +63,24 @@ void yyerror(char *s)
 
 %%
 
-program :   exp     {absyn_root = $1;}
+program :   exp
         ;
 
 exp     :   LPAREN expseq RPAREN
-        :   lvalue
-        :   NIL
-        :   INT
-        :   STRING
-        :   callexp
-        :   opexp
-        :   recordexp
-        :   arrayexp
-        :   assignexp
-        :   ifexp
-        :   whileexp
-        :   forexp
-        :   BREAK
-        :   letexp
+        |   lvalue
+        |   NIL
+        |   INT
+        |   STRING
+        |   callexp
+        |   opexp
+        |   recordexp
+        |   arrayexp
+        |   assignexp
+        |   ifexp
+        |   whileexp
+        |   forexp
+        |   BREAK
+        |   letexp
         ;
 
 expseq  :   exp SEMICOLON expseq
@@ -126,12 +88,12 @@ expseq  :   exp SEMICOLON expseq
         ;
 
 lvalue  :   ID
-        :   fieldvar
-        :   subscriptvar
+        |   fieldvar
+        |   subscriptvar
         ;
 
-fieldvar:   lvalue DOT ID;
-subscriptvar : lvalue LBRACK exp RBRACK;
+fieldvar     :  lvalue DOT ID;
+subscriptvar :  lvalue LBRACK exp RBRACK;
 
 callexp :   ID LPAREN RPAREN
         |   ID LPAREN expin RPAREN
@@ -167,7 +129,7 @@ arrayexp:   ID LBRACK exp RBRACK OF exp;
 assignexp:  lvalue ASSIGN exp;
 
 ifexp   :   IF exp THEN exp ELSE exp
-        |   IF exp then exp
+        |   IF exp THEN exp
         ;
 
 whileexp:   WHILE exp DO exp;
@@ -181,22 +143,24 @@ decs    :   dec decs
         ;
 
 dec     :   vardec
-        :   fundec
-        :   tydec
+        |   fundec
+        |   tydec
         ;
 
 vardec  :   VAR ID ASSIGN exp
-                {$$ = A_VarDec(EM_tokPos,S_Symbol($2),S_Symbol(""),$4);}
         |   VAR ID COLON ID ASSIGN exp
-                {$$ = A_VarDec(EM_tokPos,S_Symbol($2),S_Symbol($4),$6);}
         ;
 
 fundec  :   FUNCTION ID LPAREN tyfields RPAREN EQ exp
         |   FUNCTION ID LPAREN tyfields RPAREN COLON ID EQ exp
         ;
 tyfields:
-        :   ID COLON ID COMMA tyfields
+        |   tyfields_nonempty
         ;
+tyfields_nonempty   :   ID COLON ID COMMA tyfields
+                    |   ID COLON ID
+                    ;
+
 tydec   :   TYPE ID EQ ty;
 ty      :   ID
         |   LBRACE tyfields RBRACE
