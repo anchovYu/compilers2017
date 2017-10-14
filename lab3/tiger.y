@@ -54,7 +54,7 @@ void yyerror(char *s)
 
 %left OR
 %left AND
-%nonassoc EQ NEQ
+%nonassoc EQ NEQ LT LE GT GE
 %left PLUS MINUS
 %left TIMES DIVIDE
 %left UMINUS
