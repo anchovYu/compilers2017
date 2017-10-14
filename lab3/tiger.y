@@ -74,7 +74,6 @@ exp     :   LPAREN expseq RPAREN
         |   callexp
         |   opexp
         |   recordexp
-        |   arrayexp
         |   assignexp
         |   ifexp
         |   whileexp
@@ -126,7 +125,9 @@ rec_one :   ID EQ exp;
 
 arrayexp:   ID LBRACK exp RBRACK OF exp;
 
-assignexp:  lvalue ASSIGN exp;
+assignexp:  lvalue ASSIGN exp
+         |  lvalue ASSIGN arrayexp  /* hack */
+         ;
 
 ifexp   :   IF exp THEN exp ELSE exp
         |   IF exp THEN exp
