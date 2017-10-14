@@ -52,6 +52,7 @@ void yyerror(char *s)
   BREAK NIL
   FUNCTION VAR TYPE
 
+%nonassoc ASSIGN
 %left OR
 %left AND
 %nonassoc EQ NEQ LT LE GT GE
