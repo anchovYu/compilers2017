@@ -2,21 +2,21 @@
 /* Lab2 Attention: You are only allowed to add code in this file and start at Line 26.*/
 #include <string.h>
 #include "util.h"
-#include "tokens.h"
+#include "symbol.h"
 #include "errormsg.h"
+#include "absyn.h"
+#include "y.tab.h"
 
-int charPos=1;
+int charPos = 1;
 
-int yywrap(void)
-{
- charPos=1;
- return 1;
+int yywrap(void) {
+    charPos = 1;
+    return 1;
 }
 
-void adjust(void)
-{
- EM_tokPos=charPos;
- charPos+=yyleng;
+void adjust(void) {
+    EM_tokPos = charPos;
+    charPos += yyleng;
 }
 
 /*
@@ -29,8 +29,7 @@ void adjust(void)
  * @output: the string value for the input which has all the escape sequences
  * translated into their meaning.
  */
-char *getstr(const char *str)
-{
+char *getstr(const char *str) {
 	// not implemented
     return NULL;
 }
@@ -120,6 +119,7 @@ digits [0-9]+
 <COMMENT>"*/"       {adjust(); commentLayer --; if (commentLayer == 0) BEGIN INITIAL;}
     /* comment states, nested comment */
 <COMMENT>"/*"       {adjust(); commentLayer ++;}
+<COMMENT>"\n"       {adjust(); EM_newline();}
     /* comment states, ignore comment */
 <COMMENT>.          {adjust();}
 
@@ -127,10 +127,7 @@ digits [0-9]+
     /* string states, end string */
 <STRINGEXP>"\""     {charPos+=yyleng;
                      stringBuf[stringPos] = '\0';
-                     if (strlen(stringBuf) == 0)
-                        yylval.sval = NULL;
-                     else
-                        yylval.sval = stringBuf;
+                     yylval.sval = String(stringBuf);
                      stringPos = 0;
                      BEGIN INITIAL;
                      return STRING;}
