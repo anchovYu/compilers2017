@@ -27,7 +27,7 @@
 
 //assignExp
 #define get_assexp_var(a) (a->u.assign.var)
-#define get_assexp_exp(a) (a->u.assign.exp) 
+#define get_assexp_exp(a) (a->u.assign.exp)
 
 //ifexp
 #define get_ifexp_test(a) (a->u.iff.test)
@@ -77,6 +77,9 @@
 #define get_ty_array(a) (a->u.array)
 
 //a: Ty_ty
+#define get_ty_type(a) (a->kind)
+#define get_namety_ty(a) (void*)(a->u.name.ty)
+    //what's wrong?
 #define get_array_kind(a) (a->u.array->kind)
 
 //x: E_enventry
