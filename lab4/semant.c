@@ -16,6 +16,10 @@
 
 /*Lab4: Your implementation of lab4*/
 
+static char str_ty[][12] = {
+   "ty_record", "ty_nil", "ty_int", "ty_string",
+   "ty_array", "ty_name", "ty_void"};
+
 //In Lab4, the first argument exp should always be **NULL**.
 typedef void* Tr_exp;
 struct expty {
@@ -36,9 +40,10 @@ struct expty expTy(Tr_exp exp, Ty_ty ty) {
 Ty_ty actual_ty(Ty_ty ty) {
     Ty_ty t = ty;
     while(get_ty_type(t) == Ty_name) {
+        printf("***(actual_ty)name ty kind: %s\n", str_ty[t->kind]);
         //Ty_ty temp = t->u.name.ty;
         Ty_ty temp = get_namety_ty(t);
-        if (get_ty_type(temp) == Ty_record || get_ty_type(temp) == Ty_array)
+        if (!temp || get_ty_type(temp) == Ty_record || get_ty_type(temp) == Ty_array)
             break;
         t = temp;
     }
@@ -71,13 +76,28 @@ bool tyEqual(Ty_ty a, Ty_ty b) {
     }
 }
 
-// turn a list of params in func dec to tyList
+// turn a list of params in func dec to tyList in the params order.
 Ty_tyList makeFormalTyList(S_table tenv, A_fieldList params) {
     A_fieldList fieldList = params;
     Ty_tyList tyList = NULL;
+    if (fieldList && fieldList->head) {
+        Ty_ty ty = transTy(tenv, A_NameTy(fieldList->head->pos, fieldList->head->typ));
+        if (!ty) {
+            /* error */
+            return NULL;
+        }
+        tyList = Ty_TyList(ty, NULL);
+        fieldList = fieldList->tail;
+    }
+    Ty_tyList temp = tyList;
     while (fieldList && fieldList->head) {
         Ty_ty ty = transTy(tenv, A_NameTy(fieldList->head->pos, fieldList->head->typ));
-        tyList = Ty_TyList(ty, tyList);
+        if (!ty) {
+            /* error */
+            return NULL;
+        }
+        temp->tail = Ty_TyList(ty, NULL);
+        temp = temp->tail;
         fieldList = fieldList->tail;
     }
     return tyList;
@@ -90,13 +110,18 @@ Ty_ty transTy(S_table tenv, A_ty a) {
             /* 1. find this type in tenv
              * 2. return the type (iterate until single namety)
              */
+            printf("enter transTy-nameTy.\n");
+            printf("namety's ty name: %s\n", S_name(get_ty_name(a)));
             Ty_ty ty = (Ty_ty)S_look(tenv, get_ty_name(a));
+            if (ty) printf("***name ty kind: %s\n", str_ty[ty->kind]);
+
             if (!ty) {
                 /* error message */
                 EM_error(a->pos, "(transTy-namety)type not defined.");
                 return NULL;
             }
             ty = actual_ty(ty);
+            printf("enter here.\n");
             switch (ty->kind) {
                 case Ty_nil: {
                     ty = Ty_Nil();
@@ -123,19 +148,52 @@ Ty_ty transTy(S_table tenv, A_ty a) {
             return ty;
         }
         case A_recordTy: {
+            printf("enter transTy-recordTy.\n");
+            // should place them in the right order.
             A_fieldList record = get_ty_record(a);
             Ty_fieldList ty_fieldList = NULL;
+            if (record && record->head) {
+                A_field field = record->head;
+                printf("***%s\n",S_name(field->name));
+                Ty_ty fieldTy = transTy(tenv, A_NameTy(field->pos, field->typ));
+                if (!fieldTy) {
+                    /* error */
+                    return Ty_Record(ty_fieldList);
+                }
+                Ty_field ty_field = Ty_Field(field->name, fieldTy);
+                printf("***ty kind: %s\n", str_ty[ty_field->ty->kind]);
+                ty_fieldList = Ty_FieldList(ty_field, NULL);
+                record = record->tail;
+            }
+            Ty_fieldList temp = ty_fieldList;
             while (record && record->head) {
                 A_field field = record->head;
-                Ty_field ty_field = Ty_Field(field->name, transTy(tenv, A_NameTy(field->pos, field->typ)));
-                ty_fieldList = Ty_FieldList(ty_field, ty_fieldList);
+                printf("***%s\n",S_name(field->name));
+                Ty_ty fieldTy = transTy(tenv, A_NameTy(field->pos, field->typ));
+                if (!fieldTy) {
+                    /* error */
+                    return Ty_Record(ty_fieldList);
+                }
+                Ty_field ty_field = Ty_Field(field->name, fieldTy);
+                temp->tail = Ty_FieldList(ty_field, NULL);
+                temp = temp->tail;
+                //temp = temp->tail;
+                //temp = Ty_FieldList(ty_field, NULL);
+                //printf("***record field: %s\n", S_name(temp->head->name));
                 record = record->tail;
+            }
+            temp = ty_fieldList;
+            while (temp) {
+                printf("record field: %s\n", S_name(temp->head->name));
+                temp = temp->tail;
             }
             return Ty_Record(ty_fieldList);
         }
         case A_arrayTy: {
+            printf("enter transTy-arrayTy.\n");
             S_symbol array = get_ty_array(a);
             return Ty_Array(transTy(tenv, A_NameTy(a->pos, array)));
+            /* error condition: transTy returns NULL */
         }
         default: ;
     }
@@ -144,6 +202,7 @@ Ty_ty transTy(S_table tenv, A_ty a) {
 struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     switch(a->kind) {
         case A_seqExp: {
+            printf("enter transExp-seqExp.\n");
             A_expList seq = get_seqexp_seq(a);
             while (seq && seq->head && seq->tail) {
                 transExp(venv, tenv, seq->head);
@@ -155,18 +214,23 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
             return transExp(venv, tenv, seq->head);
         }
         case A_varExp: {
+            printf("enter transExp-varExp.\n");
             return transVar(venv, tenv, a->u.var);
         }
         case A_nilExp: {
+            printf("enter transExp-nilExp.\n");
             return expTy(NULL, Ty_Nil());
         }
         case A_intExp: {
+            printf("enter transExp-intExp.\n");
             return expTy(NULL, Ty_Int());
         }
         case A_stringExp: {
+            printf("enter transExp-stringExp.\n");
             return expTy(NULL, Ty_String());
         }
         case A_callExp: {
+            printf("enter transExp-callExp.\n");
             // find the label in venv, compare argument types
             S_symbol func = get_callexp_func(a);
             A_expList args = get_callexp_args(a);
@@ -183,7 +247,7 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
             Ty_tyList tyList = formals;
             while (expList && expList->head) {
                 if (!(tyList && tyList->head)) {
-                    EM_error(a->pos, "(transExp-callexp)Function params not match.");
+                    EM_error(a->pos, "(transExp-callexp)Function params not match(more).");
                     return expTy(NULL, Ty_Int());
                 }
                 struct expty paramTy = transExp(venv, tenv, expList->head);
@@ -195,13 +259,14 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
                 expList = expList->tail;
             }
             // fewer params
-            if (expList) {
-                EM_error(a->pos, "(transExp-callexp)Function params not match.");
+            if (tyList) {
+                EM_error(a->pos, "(transExp-callexp)Function params not match(fewer).");
                 return expTy(NULL, Ty_Int());
             }
             return expTy(NULL, result);
         }
     	case A_opExp: {
+            printf("enter transExp-opExp.\n");
             A_oper oper = get_opexp_oper(a);
             struct expty left = transExp(venv, tenv, get_opexp_left(a));
             struct expty right = transExp(venv, tenv, get_opexp_right(a));
@@ -230,25 +295,29 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
             return expTy(NULL, Ty_Int());
         }
         case A_recordExp: {
+            printf("enter transExp-recordExp.\n");
             S_symbol typ = get_recordexp_typ(a);
             A_efieldList fields = get_recordexp_fields(a);
 
             Ty_ty ty = transTy(tenv, A_NameTy(a->pos, typ));
-            if (ty->kind != Ty_name || ((Ty_ty)get_namety_ty(ty))->kind != Ty_record) {
+            if (!ty || ty->kind != Ty_name || ((Ty_ty)get_namety_ty(ty))->kind != Ty_record) {
                 EM_error(a->pos, "(transExp-recordExp)no such record id");
-                return expTy(NULL, Ty_Void()); // or nil?? what does nil do?
+                return expTy(NULL, Ty_Nil()); // or nil?? what does nil do?
             }
-            Ty_fieldList record = ((Ty_ty)get_namety_ty(ty))->u.record;
 
+            Ty_fieldList record = ((Ty_ty)get_namety_ty(ty))->u.record;
             A_efieldList efieldList = fields;
             Ty_fieldList fieldList = record;
             while (efieldList && efieldList->head) {
                 // assume they are in the same order..
+                // but they are not.
                 if(!(fieldList && fieldList->head)) {
-                    EM_error(a->pos, "(transExp-recordExp)");
+                    EM_error(a->pos, "(transExp-recordExp)too many params");
                     return expTy(NULL, Ty_Nil()); // or nil?? what does nil do?
                 }
-                if (efieldList->head->name != fieldList->head->name) {
+                printf("efieldList:%s\n", S_name(efieldList->head->name));
+                printf("fieldList:%s\n", S_name(fieldList->head->name));
+                if (strcmp(S_name(efieldList->head->name), S_name(fieldList->head->name))) {
                     EM_error(a->pos, "(transExp-recordExp)names not match");
                     return expTy(NULL, Ty_Nil()); // or nil?? what does nil do?
                 }
@@ -264,18 +333,18 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
                 EM_error(a->pos, "(transExp-recordExp)fewer params");
                 return expTy(NULL, Ty_Nil()); // or nil?? what does nil do?
             }
-            return expTy(NULL, Ty_Nil());
-
+            return expTy(NULL, ty); // return nameTy
         }
         case A_arrayExp: {
+            printf("enter transExp-arrayExp.\n");
             S_symbol typ = get_arrayexp_typ(a);
             A_exp size = get_arrayexp_size(a);
             A_exp init = get_arrayexp_init(a);
 
             Ty_ty ty = transTy(tenv, A_NameTy(a->pos, typ));
-            if (ty->kind != Ty_name || ((Ty_ty)get_namety_ty(ty))->kind != Ty_array) {
+            if (!ty || ty->kind != Ty_name || ((Ty_ty)get_namety_ty(ty))->kind != Ty_array) {
                 EM_error(a->pos, "(transExp-arrayexp)no such array id");
-                return expTy(NULL, Ty_Int());// TODO
+                return expTy(NULL, Ty_Nil());// TODO
             }
 
             struct expty sizety = transExp(venv, tenv, size);
@@ -283,30 +352,34 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
 
             if (sizety.ty->kind != Ty_int) {
                 EM_error(size->pos, "(transExp-arrayexp)size type wrong");
-                return expTy(NULL, Ty_Int());// TODO
+                return expTy(NULL, Ty_Nil());// TODO
             }
-            if (!tyEqual(initty.ty, ty->u.array)) {
+            if (!tyEqual(initty.ty, ((Ty_ty)get_namety_ty(ty))->u.array)) {
                 EM_error(size->pos, "(transExp-arrayexp)init type wrong");
-                return expTy(NULL, Ty_Int());// TODO
+                return expTy(NULL, Ty_Nil());// TODO
             }
-            return expTy(NULL, initty.ty);
+            return expTy(NULL, ty);
         }
         case A_assignExp: {
+            printf("enter transExp-assignExp.\n");
             A_var var = get_assexp_var(a);
             A_exp exp = get_assexp_exp(a);
-            struct expty varTy = transVar(venv, tenv, var);
+            struct expty lhsTy = transVar(venv, tenv, var);
+                //printf("finish transExp-assignExp: transVar.\n");
             struct expty rhsTy = transExp(venv, tenv, exp);
-            if (!tyEqual(varTy.ty, rhsTy.ty))
+            if (!tyEqual(lhsTy.ty, rhsTy.ty))
                 EM_error(a->pos, "(transExp-assignExo)types not match.");
             return expTy(NULL, Ty_Void());
         }
         case A_ifExp: {
+            printf("enter transExp-ifExp.\n");
             A_exp test = get_ifexp_test(a);
             A_exp then = get_ifexp_then(a);
             A_exp elsee = get_ifexp_else(a);
             struct expty testTy = transExp(venv, tenv, test);
             if (testTy.ty->kind != Ty_int) {
                 EM_error(test->pos, "(transExp-ifexp)test condition return wrong type.");
+                return expTy(NULL, Ty_Void());
             }
             struct expty thenTy = transExp(venv, tenv, then);
             if (!elsee) {
@@ -315,11 +388,15 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
                 return expTy(NULL, Ty_Void());
             }
             struct expty elseTy = transExp(venv, tenv, elsee);
-            if (!tyEqual(thenTy.ty, elseTy.ty))
+            if (!tyEqual(thenTy.ty, elseTy.ty)) {
                 EM_error(then->pos, "(transExp-ifexp)two branch return values not the same type.");
+                return expTy(NULL, Ty_Void());
+            }
             return expTy(NULL, thenTy.ty);
         }
         case A_whileExp: {
+            printf("enter transExp-whileExp.\n");
+
             A_exp test = get_whileexp_test(a);
             A_exp body = get_whileexp_body(a);
             struct expty testTy = transExp(venv, tenv, test);
@@ -331,14 +408,18 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
             return expTy(NULL, Ty_Void());
         }
         case A_forExp: {
+            printf("enter transExp-forExp.\n");
+
             S_symbol var = get_forexp_var(a);
             A_exp lo = get_forexp_lo(a);
             A_exp hi = get_forexp_hi(a);
             A_exp body = get_forexp_body(a);
             struct expty loTy = transExp(venv, tenv, lo);
             struct expty hiTy = transExp(venv, tenv, hi);
-            if (!tyEqual(loTy.ty, hiTy.ty))
+            if (!tyEqual(loTy.ty, hiTy.ty)) {
                 EM_error(lo->pos, "(transExp-forExp)lo and hi value types not match.");
+                return expTy(NULL, Ty_Void());
+            }
             S_beginScope(venv);
                 S_enter(venv, var, E_VarEntry(loTy.ty));
                 struct expty bodyTy = transExp(venv, tenv, body);
@@ -348,20 +429,28 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
             return expTy(NULL, Ty_Void());
         }
         case A_breakExp: {
+            printf("enter transExp-breakExp.\n");
+
             //TODO??how to handle this??
             return expTy(NULL, Ty_Void());
         }
         case A_letExp: {
-            struct expty exp;
-            A_decList decList;
+            printf("enter transExp-letExp.\n");
+            A_decList decList = get_letexp_decs(a);
+            A_exp body = get_letexp_body(a);
+
             S_beginScope(venv);
             S_beginScope(tenv);
-            for (decList = get_letexp_decs(a); decList; decList = decList->tail)
+            //printf("enter here!\n");
+            while (decList && decList -> head) {
                 transDec(venv, tenv, decList->head);
-            exp = transExp(venv, tenv, get_letexp_body(a));
+                decList = decList->tail;
+            }
+            printf("after transDec!\n");
+            struct expty bodyTy = transExp(venv, tenv, body);
             S_endScope(tenv);
             S_endScope(venv);
-            return exp;
+            return bodyTy;
         }
         default: ;
     }
@@ -370,37 +459,56 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
 void transDec(S_table venv, S_table tenv, A_dec d) {
     switch (d->kind) {
         case A_varDec: {
+            printf("enter transDec-varDec.\n");
+
             A_exp init = get_vardec_init(d);
             S_symbol var = get_vardec_var(d);
             S_symbol typ = get_vardec_typ(d);
             struct expty initTy = transExp(venv, tenv, init);
+            //printf("here\n");
+            //printf("%s\n", str_ty[initTy.ty->kind]);
+
             if (strcmp(S_name(typ), "")) {
                 Ty_ty ty = transTy(tenv, A_NameTy(d->pos, typ));
                 // TODO: this part also requires transTy and transExp
                 // results the same in record and array type.
-                if (!tyEqual(initTy.ty, ty))
+                if (!ty) {
+                    return;
+                }
+                if (!tyEqual(initTy.ty, ty)) {
                     EM_error(d->pos, "(transDec) error.");
+                    return;
+                }
             }
             S_enter(venv, var, E_VarEntry(initTy.ty));
             break;
         }
         case A_typeDec: {
+            printf("enter transDec-typeDec.\n");
             A_nametyList nametyList = get_typedec_list(d);
             // enter all dec of name type
             while (nametyList && nametyList->head) {
                 S_enter(tenv, nametyList->head->name, Ty_Name(nametyList->head->name, NULL));
+                printf("nametyList->head->name: %s\n", S_name(nametyList->head->name));
                 nametyList = nametyList->tail;
             }
+            printf("after first part of typedec!\n");
             nametyList = get_typedec_list(d);
             while (nametyList && nametyList->head) {
                 A_namety namety = nametyList->head;
+                printf("looking for namety->name: %s\n", S_name(namety->name));
                 Ty_ty ty = (Ty_ty)S_look(tenv, namety->name);
+
                 if (get_ty_type(ty) != Ty_name)
                     EM_error(namety->ty->pos, "(transDec-typeDec)error.");
-                ty = get_namety_ty(ty);
-                if (get_ty_type(ty) != Ty_name)
-                    /*EM_error();*/;
-                ty->u.name.ty = transTy(tenv, namety->ty);
+
+                Ty_ty typeTy = transTy(tenv, namety->ty);
+                if (!typeTy) {
+                    /* error */
+                    return;
+                }
+                ty->u.name.ty = typeTy;
+
                 // translate A_ty to Ty_ty.
                 // TODO: how? translate to which step? if we have type a = b, type c = a,
                 // should we return for c nameTy(a) or nameTy(b)?
@@ -408,6 +516,7 @@ void transDec(S_table venv, S_table tenv, A_dec d) {
                 nametyList = nametyList->tail;
             }
             // TODO: cycle detection.
+            //printf("after typedec!\n");
             break;
         }
         case A_functionDec: {
@@ -417,6 +526,7 @@ void transDec(S_table venv, S_table tenv, A_dec d) {
              * 4. transExp, check whether return type is equivalent
              * 5. endscope
              */
+            printf("enter transDec-functionDec.\n");
             A_fundecList fundecList = get_funcdec_list(d);
             while (fundecList && fundecList->head) {
                 A_fundec fundec = fundecList->head;
@@ -466,24 +576,38 @@ void transDec(S_table venv, S_table tenv, A_dec d) {
 struct expty transVar(S_table venv, S_table tenv, A_var v) {
     switch(v->kind) {
         case A_simpleVar: {
+            printf("enter transVar-simpleVar.\n");
+
             S_symbol simple = get_simplevar_sym(v);
             E_enventry enventry = (E_enventry)S_look(venv, simple);
-            if (enventry && enventry->kind == E_varEntry)
+            if (enventry && enventry->kind == E_varEntry) {
+                Ty_ty temp = get_varentry_type(enventry); ////
+                printf("%s\n", str_ty[temp->kind]);
+                //printf("here\n");
+
                 return expTy(NULL, actual_ty(get_varentry_type(enventry)));
-            else {
+            } else {
                 EM_error(v->pos, "undefined variable %s", S_name(get_simplevar_sym(v)));
                 return expTy(NULL, Ty_Int());
             }
         }
         case A_fieldVar: {
+            printf("enter transVar-fieldVar.\n");
             A_var var = get_fieldvar_var(v);
             struct expty fieldVarTy = transVar(venv, tenv, var);
 
-            if (fieldVarTy.ty->kind != Ty_name)
+            if (fieldVarTy.ty->kind != Ty_name){
                 /* error */;
+                EM_error(v->pos, "not a record type");
+                return expTy(NULL, Ty_Nil());
+            }
+
             Ty_ty ty = get_namety_ty(fieldVarTy.ty);
-            if (ty->kind != Ty_record)
+            if (ty->kind != Ty_record) {
                 /* error */;
+                EM_error(v->pos, "not a record type");
+                return expTy(NULL, Ty_Nil());
+            }
 
             S_symbol sym = get_fieldvar_sym(v);
             Ty_fieldList fieldList = ty->u.record;
@@ -497,15 +621,23 @@ struct expty transVar(S_table venv, S_table tenv, A_var v) {
             return expTy(NULL, Ty_Int());
         }
         case A_subscriptVar: {
+            printf("enter transVar-subscriptVar.\n");
+
+            //TODO: shall we detect overflow exception?
             A_var var = get_subvar_var(v);
             struct expty subscriptVarTy = transVar(venv, tenv, var);
 
-            if (subscriptVarTy.ty->kind != Ty_name)
+            if (subscriptVarTy.ty->kind != Ty_name) {
                 /* error */;
+                EM_error(v->pos, "array type required");
+                return expTy(NULL, Ty_Nil());
+            }
             Ty_ty ty = get_namety_ty(subscriptVarTy.ty);
-            if (ty->kind != Ty_array)
+            if (ty->kind != Ty_array) {
                 /* error */;
-
+                EM_error(v->pos, "array type required");
+                return expTy(NULL, Ty_Nil());
+            }
             return expTy(NULL, actual_ty(get_ty_array(ty)));
         }
         default: ;
