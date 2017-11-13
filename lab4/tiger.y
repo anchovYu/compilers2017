@@ -114,7 +114,10 @@ exp     :   LPAREN exp RPAREN   /* emm.. */
         |   BREAK
                 {$$ = A_BreakExp(EM_tokPos);}
         |   letexp
-                {$$ = $1;}
+                {$$ = $1;} /* acutally miss the () expression */
+        |   LPAREN RPAREN
+                {$$ = A_SeqExp(EM_tokPos, NULL);}  /* hacking.. */
+
         ;
 
 /* Difference between expseq and explist in nonterminal:
