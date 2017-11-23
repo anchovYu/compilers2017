@@ -27,7 +27,7 @@
 
 //assignExp
 #define get_assexp_var(a) (a->u.assign.var)
-#define get_assexp_exp(a) (a->u.assign.exp) 
+#define get_assexp_exp(a) (a->u.assign.exp)
 
 //ifexp
 #define get_ifexp_test(a) (a->u.iff.test)
@@ -53,6 +53,7 @@
 #define get_vardec_init(a) (a->u.var.init)
 #define get_vardec_var(a)  (a->u.var.var)
 #define get_vardec_typ(a)  (a->u.var.typ)
+#define get_vardec_escape(a) (a->u.var.escape)
 
 #define get_typedec_list(a) (a->u.type)
 #define get_funcdec_list(a) (a->u.function)
@@ -77,18 +78,30 @@
 #define get_ty_array(a) (a->u.array)
 
 //a: Ty_ty
+#define get_ty_type(a) (a->kind)
 #define get_array_kind(a) (a->u.array->kind)
+#define get_namety_ty(a) (void*)(a->u.name.ty)
+    //what's wrong?
+#define get_array_kind(a) (a->u.array->kind)
+
 
 //x: E_enventry
 #define get_varentry_type(x) (x->u.var.ty)
+#define get_varentry_access(x) (x->u.var.access)
 
 #define get_func_res(x) (x->u.fun.result)
 #define get_func_tylist(x) (x->u.fun.formals)
+#define get_func_level(x) (x->u.fun.level)
+#define get_func_label(x) (x->u.fun.label)
 
 //------------------ lab5 ----------------------
 #define get_var_access(x) (x->u.var.access)
 #define get_func_label(x) (x->u.fun.label)
 #define get_func_level(x) (x->u.fun.level)
+
+//F_access
+#define get_access_offset(x) (x->u.offset)
+#define get_access_reg(x) (x->u.reg)
 
 
 

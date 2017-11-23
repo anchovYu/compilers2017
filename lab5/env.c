@@ -1,33 +1,33 @@
 #include <stdio.h>
 #include "util.h"
 #include "symbol.h"
-#include "env.h" 
+#include "env.h"
 
 /*Lab4: Your implementation of lab4*/
 
-E_enventry E_VarEntry(Tr_access access, Ty_ty ty)
-{
+E_enventry E_VarEntry(Tr_access access, Ty_ty ty) {
 	E_enventry entry = checked_malloc(sizeof(*entry));
 
+    entry->kind = E_varEntry; // ????
 	entry->u.var.access = access;
 	entry->u.var.ty = ty;
 	return entry;
 }
 
-E_enventry E_ROVarEntry(Tr_access access, Ty_ty ty)
-{
+E_enventry E_ROVarEntry(Tr_access access, Ty_ty ty) {
 	E_enventry entry = checked_malloc(sizeof(*entry));
 
+    entry->kind = E_varEntry; // ????
 	entry->u.var.access = access;
 	entry->u.var.ty = ty;
 	entry->readonly = 1;
 	return entry;
 }
 
-E_enventry E_FunEntry(Tr_level level, Temp_label label, Ty_tyList formals, Ty_ty result)
-{
+E_enventry E_FunEntry(Tr_level level, Temp_label label, Ty_tyList formals, Ty_ty result) {
 	E_enventry entry = checked_malloc(sizeof(*entry));
 
+    entry->kind = E_funEntry; // ????
 	entry->u.fun.level = level;
 	entry->u.fun.label = label;
 	entry->u.fun.formals = formals;
@@ -37,8 +37,7 @@ E_enventry E_FunEntry(Tr_level level, Temp_label label, Ty_tyList formals, Ty_ty
 
 //sym->value
 //type_id(name, S_symbol) -> type (Ty_ty)
-S_table E_base_tenv(void)
-{
+S_table E_base_tenv(void) {
 	S_table table;
 	S_symbol ty_int;
 	S_symbol ty_string;
@@ -47,71 +46,107 @@ S_table E_base_tenv(void)
 
 	//basic type: string
 	ty_int = S_Symbol("int");
-	S_enter(table, ty_int, Ty_Int());	
+	S_enter(table, ty_int, Ty_Int());
 
 	//basic type: string
 	ty_string = S_Symbol("string");
-	S_enter(table, ty_string, Ty_String());	
+	S_enter(table, ty_string, Ty_String());
 
 	return table;
 }
 
-S_table E_base_venv(void)
-{
+S_table E_base_venv(void) {
 	S_table venv;
+    S_symbol funcname;
+    Ty_tyList formalTys;
+	Ty_ty resultTy;
 
-	Ty_ty result;
-	Ty_tyList formals;
-	
 	Temp_label label = NULL;
+    U_boolList formals;
 	Tr_level level;
-	
-	level = Tr_outermost();
+
+	Tr_level parent = Tr_outermost();
 	venv = S_empty();
 
-	S_enter(venv,S_Symbol("flush"),E_FunEntry(level,label,NULL,NULL));
-	
-	result = Ty_Int();
+    //basic func: flush
+    formals = NULL;
+    level = Tr_newLevel(parent, label, formals);
+    funcname = S_Symbol("flush");
+    formalTys = NULL;
+    resultTy = Ty_Void();
+	S_enter(venv, funcname, E_FunEntry(level, label, formalTys, resultTy));
 
-	formals = checked_malloc(sizeof(*formals));
-	formals->head = Ty_Int();
-	formals->tail = NULL;
-	S_enter(venv,S_Symbol("exit"),E_FunEntry(level,label,formals,NULL));
+    //basic func: exit
+    formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
+    level = Tr_newLevel(parent, label, formals);
+    funcname = S_Symbol("exit");
+    formalTys = Ty_TyList(Ty_Int(), NULL);
+    resultTy = Ty_Void();
+    S_enter(venv, funcname, E_FunEntry(level, label, formalTys, resultTy));
 
-	S_enter(venv,S_Symbol("not"),E_FunEntry(level,label,formals,result));
+    //basic func: not
+    formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
+    level = Tr_newLevel(parent, label, formals);
+    funcname = S_Symbol("not");
+    formalTys = Ty_TyList(Ty_Int(), NULL);
+    resultTy = Ty_Int();
+    S_enter(venv, funcname, E_FunEntry(level, label, formalTys, resultTy));
 
-	result = Ty_String();
-	
-	S_enter(venv,S_Symbol("chr"),E_FunEntry(level,label,formals,result));
+    //basic func: chr
+    formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
+    level = Tr_newLevel(parent, label, formals);
+    funcname = S_Symbol("chr");
+    formalTys = Ty_TyList(Ty_Int(), NULL);
+    resultTy = Ty_String();
+    S_enter(venv, funcname, E_FunEntry(level, label, formalTys, resultTy));
 
-	S_enter(venv,S_Symbol("getchar"),E_FunEntry(level,label,NULL,result));
+    //basic func: getchar
+    formals = NULL;
+    level = Tr_newLevel(parent, label, formals);
+    funcname = S_Symbol("getchar");
+    formalTys = NULL;
+    resultTy = Ty_String();
+    S_enter(venv, funcname, E_FunEntry(level, label, formalTys, resultTy));
 
-	formals = checked_malloc(sizeof(*formals));
-	formals->head = Ty_String();
-	formals->tail = NULL;
+    //basic func: print
+    formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
+    level = Tr_newLevel(parent, label, formals);
+    funcname = S_Symbol("print");
+    formalTys = Ty_TyList(Ty_String(), NULL);
+    resultTy = Ty_Void();
+    S_enter(venv, funcname, E_FunEntry(level, label, formalTys, resultTy));
 
-	S_enter(venv,S_Symbol("print"),E_FunEntry(level,label,formals,NULL));
+    //basic func: ord
+    formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
+    level = Tr_newLevel(parent, label, formals);
+    funcname = S_Symbol("ord");
+    formalTys = Ty_TyList(Ty_String(), NULL);
+    resultTy = Ty_Int();
+    S_enter(venv, funcname, E_FunEntry(level, label, formalTys, resultTy));
 
-	result = Ty_Int();
-	S_enter(venv,S_Symbol("ord"),E_FunEntry(level,label,formals,result));
+    //basic func: size
+    formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
+    level = Tr_newLevel(parent, label, formals);
+    funcname = S_Symbol("size");
+    formalTys = Ty_TyList(Ty_String(), NULL);
+    resultTy = Ty_Int();
+    S_enter(venv, funcname, E_FunEntry(level, label, formalTys, resultTy));
 
-	S_enter(venv,S_Symbol("size"),E_FunEntry(level,label,formals,result));
+    //basic func: concat
+    formals = U_BoolList(TRUE, U_BoolList(TRUE, NULL));   //TODO: assume all params escape
+    level = Tr_newLevel(parent, label, formals);
+    funcname = S_Symbol("concat");
+    formalTys = Ty_TyList(Ty_String(), Ty_TyList(Ty_String(), NULL));
+    resultTy = Ty_String();
+    S_enter(venv, funcname, E_FunEntry(level, label, formalTys, resultTy));
 
-	result = Ty_String();
-	formals = checked_malloc(sizeof(*formals));
-	formals->head = Ty_String();
-	formals->tail = checked_malloc(sizeof(*formals));
-	formals->tail->head = Ty_String();
-	S_enter(venv,S_Symbol("concat"),E_FunEntry(level,label,formals,result));
-
-	formals = checked_malloc(sizeof(*formals));
-	formals->head = Ty_String();
-	formals->tail = checked_malloc(sizeof(*formals));
-	formals->tail->head = Ty_Int();
-	formals->tail->tail = checked_malloc(sizeof(*formals));
-	formals->tail->tail->head = Ty_Int();
-	S_enter(venv,S_Symbol("substring"),E_FunEntry(level,label,formals,result));
-
+    //basic func: substring
+    formals = U_BoolList(TRUE, U_BoolList(TRUE, U_BoolList(TRUE, NULL)));   //TODO: assume all params escape
+    level = Tr_newLevel(parent, label, formals);
+    funcname = S_Symbol("substring");
+    formalTys = Ty_TyList(Ty_String(), Ty_TyList(Ty_Int(), Ty_TyList(Ty_Int(), NULL)));
+    resultTy = Ty_String();
+    S_enter(venv, funcname, E_FunEntry(level, label, formalTys, resultTy));
 
 	return venv;
 }
