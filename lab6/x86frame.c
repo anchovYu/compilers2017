@@ -12,7 +12,15 @@
 
 const int F_wordSize = 4;
 
-/*Lab5: Your implementation here.*/
+// varibales
+struct F_access_ {
+	enum {inFrame, inReg} kind;
+	union {
+		int offset;       //inFrame
+		Temp_temp reg;    //inReg
+	} u;
+};
+
 F_accessList F_AccessList(F_access head, F_accessList tail) {
     F_accessList p = (F_accessList)checked_malloc(sizeof *p);
     p->head = head;
@@ -20,14 +28,6 @@ F_accessList F_AccessList(F_access head, F_accessList tail) {
     return p;
 }
 
-//varibales
-struct F_access_ {
-	enum {inFrame, inReg} kind;
-	union {
-		int offset; //inFrame
-		Temp_temp reg; //inReg
-	} u;
-};
 static F_access InFrame(int offset) {
     F_access p = (F_access)checked_malloc(sizeof *p);
     p->kind = inFrame;
@@ -45,49 +45,59 @@ struct F_frame_ {
     Temp_label name;
     F_accessList formals;
     F_accessList locals;
-
-    int argSize;    // number of auguments
-    int localSize;  // number of local vars
+    int localCnt;  // number of local vars on stack
 };
 
+// alloc a new frame, with all formals on stack.
 F_frame F_newFrame(Temp_label name, U_boolList formals) {
     F_frame p = (F_frame)checked_malloc(sizeof *p);
     p->name = name;
-    p->formals = F_AccessList(NULL, NULL);
-    F_accessList accList = p->formals;
-    while (formals && formals->head) {
-        if (formals->head == TRUE) {
-            accList->head = InFrame(0);
-            accList->tail = F_AccessList(NULL, NULL);
-        } else {
-            Temp_temp r = Temp_newtemp();
-            accList->head = InReg(r);
-            accList->tail = F_AccessList(NULL, NULL);
-        }
-        accList = accList->tail;
-        formals = formals->tail;   //TODO
+    p->locals = NULL;
+    p->localCnt = 0;
+
+    F_accessList accList = NULL;
+    // formals starts from %ebp + 8 (including static link)
+    int offset = 8;
+    U_boolList tmp = formals;
+    while (tmp && tmp->head) {
+        accList = F_AccessList(InFrame(offset), accList);
+        offset += 4;
+        tmp = tmp->tail;
     }
+    p->formals = accList;
     return p;
+// TODO: note that formals are in reverse order.
 }
 
 Temp_label F_name(F_frame f) {
     return f->name;
 }
+
 F_accessList F_formals(F_frame f) {
     return f->formals;
 }
 
 F_access F_allocLocal(F_frame f, bool escape) {
     F_access acc;
-    if (escape)
-        acc = InFrame(0);//acc = InFrame();
+    if (escape) {
+        f->localCnt ++;
+        acc = InFrame((-4) * (f->localCnt));
+    }
     else {
         Temp_temp r = Temp_newtemp();
         acc = InReg(r);
     }
-    f->locals = F_AccessList(acc, f->locals); // TODO and the order
+    f->locals = F_AccessList(acc, f->locals);
     return acc;
+// TODO: note that locals are in reverse order.
 }
+
+// alloc an escape local var in process of register allocation
+int F_allocSpill(F_frame f) {
+    F_access acc = F_allocLocal(f, TRUE);
+    return acc->u.offset;
+}
+
 
 F_frag F_StringFrag(Temp_label label, string str) {
     F_frag p = (F_frag)checked_malloc(sizeof *p);
@@ -112,40 +122,103 @@ F_fragList F_FragList(F_frag head, F_fragList tail) {
     return p;
 }
 
-Temp_tempList F_SpecialRegs() {
-    return NULL; // TODO
-}
 
-Temp_tempList F_ArgRegs() {
-    return NULL; // TODO
-}
-
-Temp_tempList F_CalleeSaves() {
-    return NULL; // TODO
-}
-
-Temp_tempList F_CallerSaves() {
-    return NULL; // TODO
-}
+/* caller eax edx ecx
+   callee ebx esi edi */
+static Temp_temp fp = NULL;
+static Temp_temp sp = NULL;
+static Temp_temp eax = NULL;
+static Temp_temp ecx = NULL;
+static Temp_temp edx = NULL;
+static Temp_temp ebx = NULL;
+static Temp_temp esi = NULL;
+static Temp_temp edi = NULL;
 
 Temp_temp F_FP(void) {
-    return Temp_newtemp();  // TODO: ??
+    if (!fp)
+        fp = Temp_newtemp();
+    return fp;
 }
 
 Temp_temp F_SP(void) {
-    return Temp_newtemp();  // TODO: ??
-}
-
-Temp_temp F_EAX(void) {
-    return Temp_newtemp(); //TODO
-}
-
-Temp_temp F_EDX(void) {
-    return Temp_newtemp(); //TODO
+    if (!sp)
+        sp = Temp_newtemp();
+    return sp;
 }
 
 Temp_temp F_RV(void) {
-    return Temp_newtemp();
+    if (!eax)
+        eax = Temp_newtemp();
+    return fp;
+}
+
+Temp_temp F_EAX(void) {
+    if (!eax)
+        eax = Temp_newtemp();
+    return fp;
+}
+
+Temp_temp F_ECX(void) {
+    if (!ecx)
+        ecx = Temp_newtemp();
+    return fp;
+}
+
+Temp_temp F_EDX(void) {
+    if (!edx)
+        edx = Temp_newtemp();
+    return fp;
+}
+
+Temp_temp F_EBX(void) {
+    if (!ebx)
+        ebx = Temp_newtemp();
+    return fp;
+}
+
+Temp_temp F_ESI(void) {
+    if (!esi)
+        esi = Temp_newtemp();
+    return fp;
+}
+
+Temp_temp F_EDI(void) {
+    if (!edi)
+        edi = Temp_newtemp();
+    return fp;
+}
+
+static Temp_tempList callersaves = NULL;
+static Temp_tempList calleesaves = NULL;
+
+/* caller eax edx ecx
+   callee ebx esi edi */
+Temp_tempList F_CallerSaves() {
+   if (!callersaves)
+       callersaves = Temp_TempList(eax, Temp_TempList(edx, Temp_TempList(ecx, NULL)));
+   return calleesaves;
+}
+
+Temp_tempList F_CalleeSaves() {
+    if (!calleesaves)
+        calleesaves = Temp_TempList(ebx, Temp_TempList(esi, Temp_TempList(edi, NULL)));
+    return calleesaves;
+}
+
+static Temp_map initmap = NULL;
+Temp_map F_initialTempMap() {
+    if (!initmap) {
+        initmap = Temp_empty();
+        Temp_enter(initmap, eax, "%eax");
+        Temp_enter(initmap, ecx, "%ecx");
+        Temp_enter(initmap, edx, "%edx");
+        Temp_enter(initmap, ebx, "%ebx");
+        Temp_enter(initmap, esi, "%esi");
+        Temp_enter(initmap, edi, "%edi");
+        Temp_enter(initmap, fp,  "%ebp");
+        Temp_enter(initmap, sp,  "%esp");
+    }
+    return initmap;
 }
 
 
@@ -162,6 +235,71 @@ T_exp F_externalCall(string s, T_expList args) {
     return T_Call(T_Name(Temp_namedlabel(s)), args);
 }
 
-T_stm F_procEntryExit1(F_frame frame, T_stm stm) {
-    return stm; //TODO
+
+static Temp_tempList L(Temp_temp temp, Temp_tempList l) {
+    return Temp_TempList(temp, l);
+}
+
+
+// move calleesaves to or from registers,
+// before register allocation, after codegen
+// calleesave: ebx esi edi
+AS_instrList F_procEntryExit1(AS_instrList body) {
+    AS_instrList pro = NULL;
+    AS_instrList epi = NULL;
+    AS_instrList res;
+
+    Temp_temp ebx_tmp = Temp_newtemp();
+    Temp_temp esi_tmp = Temp_newtemp();
+    Temp_temp edi_tmp = Temp_newtemp();
+
+    pro = AS_InstrList(AS_Move("movl `s0, `d0\n", L(ebx_tmp, NULL), L(F_EBX(), NULL)), pro);
+    pro = AS_InstrList(AS_Move("movl `s0, `d0\n", L(esi_tmp, NULL), L(F_ESI(), NULL)), pro);
+    pro = AS_InstrList(AS_Move("movl `s0, `d0\n", L(edi_tmp, NULL), L(F_EDI(), NULL)), pro);
+
+    epi = AS_InstrList(AS_Move("movl `s0, `d0\n", L(F_EBX(), NULL), L(ebx_tmp, NULL)), epi);
+    epi = AS_InstrList(AS_Move("movl `s0, `d0\n", L(F_ESI(), NULL), L(esi_tmp, NULL)), epi);
+    epi = AS_InstrList(AS_Move("movl `s0, `d0\n", L(F_EDI(), NULL), L(edi_tmp, NULL)), epi);
+
+    res = AS_splice(pro, body);
+    res = AS_splice(res, epi);
+    return res;
+}
+
+// TODO: actually, sp is not needed.
+// sp + calleesaves(ebx, esi, edi)
+static Temp_tempList returnsink = NULL;
+
+// add live to end,
+// before register allocation, after codegen
+AS_instrList F_procEntryExit2(AS_instrList body) {
+    // if (!returnsink)
+    //     returnsink = Temp_TempList(F_SP(),
+    //                     Temp_TempList(F_EBX(),
+    //                         Temp_TempList(F_ESI(),
+    //                             Temp_TempList(F_EDI(), NULL))));
+    return AS_splice(body,
+                     AS_InstrList(AS_Oper("", NULL, F_CalleeSaves(), NULL), NULL));
+}
+
+// entry and exit for func,
+// after register allocation
+AS_instrList F_procEntryExit3(F_frame f, AS_instrList body) {
+    AS_instrList pro = NULL;
+    AS_instrList epi = NULL;
+    AS_instrList res;
+
+    char* inst = checked_malloc(80);
+    pro = AS_InstrList(AS_Oper("pushl `s0\n", NULL, L(F_FP(), NULL), NULL), pro);
+    pro = AS_InstrList(AS_Move("movl `s0, `d0\n", L(F_FP(), NULL), L(F_SP(), NULL)), pro);
+    sprintf(inst, "subl $%d, `d0\n", 4 * (f->localCnt));
+    pro = AS_InstrList(AS_Oper(inst, L(F_SP(), NULL), NULL, NULL), pro);
+
+    // TODO: remove all ebp and esp liveness.
+    epi = AS_InstrList(AS_Oper("leave\n", NULL, NULL, NULL), epi);
+    epi = AS_InstrList(AS_Oper("ret\n", NULL, NULL, NULL), epi);
+
+    res = AS_splice(pro, body);
+    res = AS_splice(res, epi);
+    return res;
 }

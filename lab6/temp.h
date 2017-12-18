@@ -1,5 +1,5 @@
 /*
- * temp.h 
+ * temp.h
  *
  */
 
@@ -13,6 +13,13 @@ int Temp_int(Temp_temp);
 typedef struct Temp_tempList_ *Temp_tempList;
 struct Temp_tempList_ { Temp_temp head; Temp_tempList tail;};
 Temp_tempList Temp_TempList(Temp_temp h, Temp_tempList t);
+Temp_tempList Temp_unionList(Temp_tempList a, Temp_tempList b);
+Temp_tempList Temp_diffList(Temp_tempList a, Temp_tempList b);
+Temp_tempList Temp_reverseList(Temp_tempList a);
+bool Temp_listEqual(Temp_tempList a, Temp_tempList b);
+bool Temp_tempInList(Temp_tempList tempList, Temp_temp temp);
+void Temp_findAndReplace(Temp_tempList* tempList, Temp_temp oldtemp, Temp_temp newtemp);
+
 
 typedef S_symbol Temp_label;
 Temp_label Temp_newlabel(void);

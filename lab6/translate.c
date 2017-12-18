@@ -17,10 +17,7 @@ struct Tr_access_ {
 	Tr_level level;
 	F_access access;
 };
-struct Tr_level_ {
-	F_frame frame;
-	Tr_level parent;
-};
+
 Tr_access Tr_Access(Tr_level level, F_access access) {
     Tr_access p = (Tr_access)checked_malloc(sizeof *p);
     p->level = level;
@@ -504,13 +501,11 @@ Tr_exp Tr_simpleVar(Tr_access access, Tr_level level) {
         return Tr_Ex(F_Exp(access->access, makeStaticLink(level, access->level)));
 }
 
-
-
-
-// TODO!
-void Tr_procEntryExit(Tr_level level, Tr_exp body, Tr_accessList formals) {
+// move body result to rv
+void Tr_procEntryExit(Tr_level level, Tr_exp body) {
     //printf("\tadd prog fragment\n");
-    fragList = F_FragList(F_ProcFrag(NULL, NULL), fragList);
+    T_stm stm = T_Move(T_Temp(F_RV()), unEx(body));
+    fragList = F_FragList(F_ProcFrag(stm, level->frame), fragList);
     return;
 }
 

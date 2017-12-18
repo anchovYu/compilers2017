@@ -15,7 +15,12 @@ struct Tr_accessList_ {
 	Tr_access head;
 	Tr_accessList tail;
 };
+
 typedef struct Tr_level_ *Tr_level;
+struct Tr_level_ {
+	F_frame frame;
+	Tr_level parent;
+};
 typedef struct Tr_expList_ *Tr_expList;
 struct Tr_expList_ {Tr_exp head; Tr_expList tail;};
 
@@ -45,7 +50,7 @@ Tr_exp Tr_indexVar(Tr_exp var, Tr_exp index);
 
 Tr_exp Tr_simpleVar(Tr_access access, Tr_level level);
 
-void Tr_procEntryExit(Tr_level level, Tr_exp body, Tr_accessList formals);
+void Tr_procEntryExit(Tr_level level, Tr_exp body);
 F_fragList Tr_getResult(void);
 
 

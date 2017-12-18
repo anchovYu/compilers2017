@@ -15,17 +15,22 @@
 #include "errormsg.h"
 #include "table.h"
 
-struct G_graph_ {int nodecount;
-		 G_nodeList mynodes, mylast;
-	       };
+
+struct G_graph_ {
+    int nodecount;
+    G_nodeList mynodes, mylast;
+};
 
 struct G_node_ {
-  G_graph mygraph;
-  int mykey;
-  G_nodeList succs;
-  G_nodeList preds;
-  void *info;
+    G_graph mygraph;
+    int mykey;
+    G_nodeList succs;
+    G_nodeList preds;
+    void *info;
 };
+
+
+/****** graph opertions ******/
 
 G_graph G_Graph(void)
 {G_graph g = (G_graph) checked_malloc(sizeof *g);
@@ -35,136 +40,254 @@ G_graph G_Graph(void)
  return g;
 }
 
-G_nodeList G_NodeList(G_node head, G_nodeList tail)
-{G_nodeList n = (G_nodeList) checked_malloc(sizeof *n);
- n->head=head;
- n->tail=tail;
- return n;
-}
-
 /* generic creation of G_node */
-G_node G_Node(G_graph g, void *info)
-{G_node n = (G_node)checked_malloc(sizeof *n);
- G_nodeList p = G_NodeList(n, NULL);
- assert(g);
- n->mygraph=g;
- n->mykey=g->nodecount++;
+G_node G_Node(G_graph g, void *info) {
+    G_node n = (G_node)checked_malloc(sizeof *n);
+    G_nodeList p = G_NodeList(n, NULL);
+    assert(g);
+    n->mygraph = g;
+    n->mykey = g->nodecount++;
 
- if (g->mylast==NULL)
-   g->mynodes=g->mylast=p;
- else g->mylast = g->mylast->tail = p;
+    if (g->mylast == NULL)
+        g->mynodes = g->mylast = p;
+    else
+        g->mylast = g->mylast->tail = p;
 
- n->succs=NULL;
- n->preds=NULL;
- n->info=info;
- return n;
+    n->succs = NULL;
+    n->preds = NULL;
+    n->info = info;
+    return n;
 }
 
-G_nodeList G_nodes(G_graph g)
-{
-  assert(g);
-  return g->mynodes;
-} 
-
-/* return true if a is in l list */
-bool G_inNodeList(G_node a, G_nodeList l) {
-  G_nodeList p;
-  for(p=l; p!=NULL; p=p->tail)
-    if (p->head==a) return TRUE;
-  return FALSE;
+int G_nodecount(G_graph g) {
+    return g->nodecount;
 }
+
+G_nodeList G_nodes(G_graph g) {
+    assert(g);
+    return g->mynodes;
+}
+
+
+/****** node opertions ******/
 
 void G_addEdge(G_node from, G_node to) {
-  assert(from);  assert(to);
-  assert(from->mygraph == to->mygraph);
-  if (G_goesTo(from, to)) return;
-  to->preds=G_NodeList(from, to->preds);
-  from->succs=G_NodeList(to, from->succs);
+    assert(from);  assert(to);
+    assert(from->mygraph == to->mygraph);
+    if (G_goesTo(from, to)) return;
+    to->preds=G_NodeList(from, to->preds);
+    from->succs=G_NodeList(to, from->succs);
+}
+
+void G_biAddEdge(G_node a, G_node b) {
+    G_addEdge(a, b);
+    G_addEdge(b, a);
 }
 
 static G_nodeList delete(G_node a, G_nodeList l) {
-  assert(a && l);
-  if (a==l->head) return l->tail;
-  else return G_NodeList(l->head, delete(a, l->tail));
+    assert(a && l);
+    if (a==l->head)
+        return l->tail;
+    else
+        return G_NodeList(l->head, delete(a, l->tail));
 }
 
 void G_rmEdge(G_node from, G_node to) {
-  assert(from && to);
-  to->preds=delete(from,to->preds);
-  from->succs=delete(to,from->succs);
+    assert(from && to);
+    to->preds=delete(from,to->preds);
+    from->succs=delete(to,from->succs);
 }
 
- /**
-  * Print a human-readable dump for debugging.
-  */
-void G_show(FILE *out, G_nodeList p, void showInfo(void *)) {
-  for (; p!=NULL; p=p->tail) {
-    G_node n = p->head;
-    G_nodeList q;
+int G_nodekey(G_node node) {
+    return node->mykey;
+}
+
+G_nodeList G_succ(G_node n) {
     assert(n);
-    if (showInfo) 
-      showInfo(n->info);
-    fprintf(out, " (%d): ", n->mykey); 
-    for(q=G_succ(n); q!=NULL; q=q->tail) 
-           fprintf(out, "%d ", q->head->mykey);
-    fprintf(out, "\n");
-  }
+    return n->succs;
 }
 
-G_nodeList G_succ(G_node n) { assert(n); return n->succs; }
-
-G_nodeList G_pred(G_node n) { assert(n); return n->preds; }
+G_nodeList G_pred(G_node n) {
+    assert(n);
+    return n->preds;
+}
 
 bool G_goesTo(G_node from, G_node n) {
-  return G_inNodeList(n, G_succ(from));
+    return G_inNodeList(n, G_succ(from));
 }
 
 /* return length of predecessor list for node n */
-static int inDegree(G_node n)
-{ int deg = 0;
-  G_nodeList p;
-  for(p=G_pred(n); p!=NULL; p=p->tail) deg++;
-  return deg;
+static int inDegree(G_node n) {
+    int deg = 0;
+    G_nodeList p;
+    for(p = G_pred(n); p != NULL; p = p->tail)
+        deg++;
+    return deg;
 }
 
 /* return length of successor list for node n */
-static int outDegree(G_node n)
-{ int deg = 0;
-  G_nodeList p; 
-  for(p=G_succ(n); p!=NULL; p=p->tail) deg++;
-  return deg;
+static int outDegree(G_node n) {
+    int deg = 0;
+    G_nodeList p;
+    for(p = G_succ(n); p != NULL; p = p->tail)
+        deg++;
+    return deg;
 }
 
-int G_degree(G_node n) {return inDegree(n)+outDegree(n);}
+int G_degree(G_node n) {
+    return inDegree(n) + outDegree(n);
+}
 
 /* put list b at the back of list a and return the concatenated list */
 static G_nodeList cat(G_nodeList a, G_nodeList b) {
-  if (a==NULL) return b;
-  else return G_NodeList(a->head, cat(a->tail, b));
+    if (a == NULL)
+        return b;
+    else
+        return G_NodeList(a->head, cat(a->tail, b));
 }
 
-/* create the adjacency list for node n by combining the successor and 
+/* create the adjacency list for node n by combining the successor and
  * predecessor lists of node n */
-G_nodeList G_adj(G_node n) {return cat(G_succ(n), G_pred(n));}
+G_nodeList G_adj(G_node n) {
+    return cat(G_succ(n), G_pred(n));
+}
 
-void *G_nodeInfo(G_node n) {return n->info;}
+void *G_nodeInfo(G_node n) {
+    return n->info;
+}
 
 
 
-/* G_node table functions */
+/****** G_table opertions ******/
 
 G_table G_empty(void) {
-  return TAB_empty();
+    return TAB_empty();
 }
 
-void G_enter(G_table t, G_node node, void *value)
-{
-  TAB_enter(t, node, value);
+void G_enter(G_table t, G_node node, void *value) {
+    TAB_enter(t, node, value);
 }
 
-void *G_look(G_table t, G_node node)
-{
-  return TAB_look(t, node);
+void *G_look(G_table t, G_node node) {
+    return TAB_look(t, node);
+}
+
+/****** adjSet(bool *) opertions ******/
+
+G_adjSet G_AdjSet(int nodecnt) {
+    G_adjSet adjSet = (G_adjSet)checked_calloc(nodecnt*nodecnt, sizeof (bool));
+    return adjSet;
+}
+
+// mark 2 bits
+void G_addAdjSet(G_adjSet adjSet, int i, int j, int nodecnt) {
+    *(adjSet + i*nodecnt + j) = TRUE;
+    *(adjSet + j*nodecnt + i) = TRUE;
+}
+
+void G_batchAddAdjSet(G_adjSet adjSet, G_node node, G_nodeList adjs, int nodecnt) {
+    G_nodeList tmp = adjs;
+    int i = G_nodekey(node);
+    while (tmp && tmp->head) {
+        int j = G_nodekey(tmp->head);
+        G_addAdjSet(adjSet, i, j, nodecnt);
+        tmp = tmp->tail;
+    }
+}
+
+// check 2 bits
+bool G_inAdjSet(G_adjSet adjSet, int i, int j, int nodecnt) {
+    return (*(adjSet + i*nodecnt + j) || *(adjSet + j*nodecnt + i));
 }
 
 
+/****** nodeList operations *******/
+
+G_nodeList G_NodeList(G_node head, G_nodeList tail) {
+    G_nodeList n = (G_nodeList)checked_malloc(sizeof *n);
+    n->head=head;
+    n->tail=tail;
+    return n;
+}
+
+/* return true if a is in l list */
+bool G_inNodeList(G_node a, G_nodeList l) {
+    G_nodeList p;
+    for(p = l; p != NULL; p = p->tail)
+        if (p->head == a) return TRUE;
+    return FALSE;
+}
+
+/* assume their is only one node in nodes, remove the first seen */
+void removeFromNodeList(G_nodeList* nodes, G_node node) {
+    G_nodeList tmp = *nodes;
+    G_nodeList last = NULL;
+    while (tmp && tmp->head) {
+        if (tmp->head == node) {
+            if (!last)
+                *nodes = (*nodes)->tail;
+            else
+                last->tail = tmp->tail;
+            return;
+        }
+        last = tmp;
+        tmp = tmp->tail;
+    }
+    printf("Node is not in the nodelist, nothing to remove.\n");
+}
+
+/* a + b, deduplicate */
+G_nodeList unionNodeList(G_nodeList a, G_nodeList b) {
+    G_nodeList res = NULL;
+    G_nodeList tmp = a;
+    while (tmp && tmp->head) {
+        res = G_NodeList(tmp->head, res);
+        tmp = tmp->tail;
+    }
+    tmp = b;
+    while (tmp && tmp->head) {
+        if (!G_inNodeList(tmp->head, res))
+            res = G_NodeList(tmp->head, res);
+        tmp = tmp->tail;
+    }
+    return res;
+}
+
+/* a intersect b */
+G_nodeList intersectNodeList(G_nodeList a, G_nodeList b) {
+    G_nodeList res = NULL;
+    G_nodeList tmp = a;
+    while (tmp && tmp->head) {
+        if (G_inNodeList(tmp->head, b))
+            res = G_NodeList(tmp->head, res);
+        tmp = tmp->tail;
+    }
+    return res;
+}
+
+/* a - b */
+G_nodeList diffNodeList(G_nodeList a, G_nodeList b) {
+    G_nodeList res = NULL;
+    G_nodeList tmp = a;
+    while (tmp && tmp->head) {
+        if (!G_inNodeList(tmp->head, b))
+            res = G_NodeList(tmp->head, res);
+        tmp = tmp->tail;
+    }
+    return res;
+}
+
+/* Print a human-readable dump for debugging. */
+void G_show(FILE *out, G_nodeList p, void showInfo(void *)) {
+    for (; p!=NULL; p=p->tail) {
+        G_node n = p->head;
+        G_nodeList q;
+        assert(n);
+        if (showInfo)
+            showInfo(n->info);
+        fprintf(out, " (%d): ", n->mykey);
+        for(q = G_succ(n); q != NULL; q = q->tail)
+            fprintf(out, "%d ", q->head->mykey);
+        fprintf(out, "\n");
+    }
+}

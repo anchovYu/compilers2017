@@ -18,7 +18,7 @@
 #include "canon.h"
 #include "prabsyn.h"
 #include "printtree.h"
-#include "escape.h" 
+#include "escape.h"
 #include "parse.h"
 #include "codegen.h"
 #include "regalloc.h"
@@ -30,7 +30,7 @@ extern bool anyErrors;
  * 2. initialize the register lists (for register allocation)
  * 3. do register allocation
  * 4. output (print) the assembly code of each function
- 
+
  * Uncommenting the following printf can help you debugging.*/
 
 /* print the assembly language instructions to filename.s */
@@ -63,12 +63,16 @@ static void doProc(FILE *out, F_frame frame, T_stm body)
  /*printStmList(stdout, stmList);
  printf("-------====trace=====-----\n");*/
  iList  = F_codegen(frame, stmList); /* 9 */
+ iList = F_procEntryExit1(iList);
+ iList = F_procEntryExit2(iList);
 
  AS_printInstrList(stdout, iList, Temp_layerMap(F_tempMap, Temp_name()));
  printf("----======before RA=======-----\n");
 
  //G_graph fg = FG_AssemFlowGraph(iList);  /* 10.1 */
  struct RA_result ra = RA_regAlloc(frame, iList);  /* 11 */
+
+ ra.il = F_procEntryExit3(frame, ra.il);
 
  fprintf(out, "BEGIN function\n");
  AS_printInstrList (out, proc->body,
@@ -86,7 +90,7 @@ static void doProc(FILE *out, F_frame frame, T_stm body)
  fprintf(out, ".type %s, @function\n", procName);
  fprintf(out, "%s:\n", procName);
 
- 
+
  //fprintf(stdout, "%s:\n", Temp_labelstring(F_name(frame)));
  //prologue
  fprintf(out, "%s", proc->prolog);
@@ -126,7 +130,7 @@ int main(int argc, string *argv)
    absyn_root = parse(argv[1]);
    if (!absyn_root)
      return 1;
-     
+
 #if 0
    pr_exp(out, absyn_root, 0); /* print absyn data structure */
    fprintf(out, "\n");
@@ -147,7 +151,7 @@ int main(int argc, string *argv)
      if (frags->head->kind == F_procFrag) {
        doProc(out, frags->head->u.proc.frame, frags->head->u.proc.body);
 	 }
-     else if (frags->head->kind == F_stringFrag) 
+     else if (frags->head->kind == F_stringFrag)
 	   doStr(out, frags->head->u.stringg.label, frags->head->u.stringg.str);
 
    fclose(out);

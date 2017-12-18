@@ -689,7 +689,7 @@ Tr_exp transDec(S_table venv, S_table tenv, A_dec d, Tr_level level, Temp_label 
                         EM_error(fundec->pos, "(transDec-func)result type is incorrect.");
                 }
                 S_endScope(venv);
-                Tr_procEntryExit(NULL, NULL, NULL);
+                Tr_procEntryExit(curLevel, bodyTy.exp);
                 fundecList = fundecList->tail;
             }
             return Tr_nop();
@@ -779,12 +779,12 @@ struct expty transVar(S_table venv, S_table tenv, A_var v, Tr_level level, Temp_
 }
 
 
-F_fragList SEM_transProg(A_exp exp){
+F_fragList SEM_transProg(A_exp exp) {
 	//TODO LAB5: do not forget to add the main frame
     S_table tenv = E_base_tenv();
     S_table venv = E_base_venv();
-    transExp(venv, tenv, exp, Tr_outermost(), Temp_newlabel());
+    struct expty bodyTy = transExp(venv, tenv, exp, Tr_outermost(), Temp_newlabel());
         // TODO: not knowing much about breakk
-    Tr_procEntryExit(NULL, NULL, NULL); // call the main func
+    Tr_procEntryExit(Tr_outermost(), bodyTy.exp); // call the main func
     return Tr_getResult();
 }

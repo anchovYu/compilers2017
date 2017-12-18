@@ -91,7 +91,7 @@ string Temp_look(Temp_map m, Temp_temp t) {
   else return NULL;
 }
 
-Temp_tempList Temp_TempList(Temp_temp h, Temp_tempList t) 
+Temp_tempList Temp_TempList(Temp_temp h, Temp_tempList t)
 {Temp_tempList p = (Temp_tempList) checked_malloc(sizeof (*p));
  p->head=h; p->tail=t;
  return p;
@@ -115,4 +115,89 @@ void Temp_dumpMap(FILE *out, Temp_map m) {
      fprintf(out,"---------\n");
      Temp_dumpMap(out,m->under);
   }
+}
+
+bool Temp_tempInList(Temp_tempList tempList, Temp_temp temp) {
+    Temp_tempList tmp = tempList;
+    while (tmp && tmp->head) {
+        if (temp == tmp->head)
+            return TRUE;
+        tmp = tmp->tail;
+    }
+    return FALSE;
+}
+// A+B
+Temp_tempList Temp_unionList(Temp_tempList a, Temp_tempList b) {
+    Temp_tempList res = NULL;
+    Temp_tempList tmp = a;
+    while (tmp && tmp->head) {
+        res = Temp_TempList(tmp->head, res);
+        tmp = tmp->tail;
+    }
+    tmp = b;
+    while (tmp && tmp->head) {
+        if (!Temp_tempInList(res, tmp->head))
+            res = Temp_TempList(tmp->head, res);
+        tmp = tmp->tail;
+    }
+    return res;
+}
+
+// A-B
+Temp_tempList Temp_diffList(Temp_tempList a, Temp_tempList b) {
+    Temp_tempList res = NULL;
+    Temp_tempList tmp = a;
+    while (tmp && tmp->head) {
+        if (!Temp_tempInList(b, tmp->head))
+            res = Temp_TempList(tmp->head, res);
+        tmp = tmp->tail;
+    }
+    return res;
+}
+
+// reverse list order
+Temp_tempList Temp_reverseList(Temp_tempList a) {
+    Temp_tempList res = NULL;
+    Temp_tempList tmp = a;
+    while (tmp && tmp->head) {
+        res = Temp_TempList(tmp->head, res);
+        tmp = tmp->tail;
+    }
+    return res;
+}
+
+bool Temp_listEqual(Temp_tempList a, Temp_tempList b) {
+    Temp_tempList tmp = a;
+    while (tmp && tmp->head) {
+        if (!Temp_tempInList(b, tmp->head))
+            return FALSE;
+        tmp = tmp->tail;
+    }
+    tmp = b;
+    while (tmp && tmp->head) {
+        if (!Temp_tempInList(a, tmp->head))
+            return FALSE;
+        tmp = tmp->tail;
+    }
+    return TRUE;
+}
+
+void Temp_findAndReplace(Temp_tempList* tempList,
+    Temp_temp oldtemp, Temp_temp newtemp) {
+    Temp_tempList temps = *tempList;
+    Temp_tempList last = NULL;
+    while (temps && temps->head) {
+        if (temps->head == oldtemp) {
+            if (!last) {
+                *tempList = Temp_TempList(newtemp, temps->tail);
+                last = *tempList;
+            }
+            else {
+                last->tail = Temp_TempList(newtemp, temps->tail);
+                last = last->tail;
+            }
+        } else
+            last = temps;
+        temps = temps->tail;
+    }
 }

@@ -11,7 +11,7 @@ AS_targets AS_Targets(Temp_labelList labels);
 
 typedef struct AS_instr_ *AS_instr;
 struct AS_instr_ { enum {I_OPER, I_LABEL, I_MOVE} kind;
-	       union {struct {string assem; Temp_tempList dst, src; 
+	       union {struct {string assem; Temp_tempList dst, src;
 			      AS_targets jumps;} OPER;
 		      struct {string assem; Temp_label label;} LABEL;
 		      struct {string assem; Temp_tempList dst, src;} MOVE;
@@ -21,6 +21,9 @@ struct AS_instr_ { enum {I_OPER, I_LABEL, I_MOVE} kind;
 AS_instr AS_Oper(string a, Temp_tempList d, Temp_tempList s, AS_targets j);
 AS_instr AS_Label(string a, Temp_label label);
 AS_instr AS_Move(string a, Temp_tempList d, Temp_tempList s);
+
+// whether a instr is jump or cjump
+bool AS_hasJmp(AS_instr i);
 
 void AS_print(FILE *out, AS_instr i, Temp_map m);
 
@@ -39,6 +42,7 @@ struct AS_proc_ {
 };
 
 AS_proc AS_Proc(string p, AS_instrList b, string e);
+
 
 
 //TA's implementation. Just for reference.

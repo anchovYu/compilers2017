@@ -22,7 +22,6 @@ static void emit(AS_instr inst) {
 static Temp_tempList L(Temp_temp temp, Temp_tempList l) {
     return Temp_TempList(temp, l);
 }
-static Temp_tempList reverseTempList(Temp_tempList l);
 static void pushCallerSaves();
 static void popCallerSaves();
 
@@ -30,29 +29,32 @@ static void munchStm(T_stm s);
 static Temp_temp munchExp(T_exp e);
 static Temp_tempList munchArgs(int i, T_expList args);
 
-
-static Temp_tempList reverseTempList(Temp_tempList l) {
-    Temp_tempList res, restmp;
-    Temp_tempList tmp = l;
-    while (tmp && tmp->head) {
-        restmp = Temp_TempList(tmp->head, NULL);
-        restmp = restmp->tail;
-        tmp = tmp->tail;
-    }
-    return res;
-}
 static void pushCallerSaves() {
     Temp_tempList callersaves = F_CallerSaves();
     while (callersaves && callersaves->head) {
-        emit(AS_Oper("push `s0", L(F_SP(), NULL), L(callersaves->head, NULL), NULL));
+        emit(AS_Oper("push `s0", NULL, L(callersaves->head, NULL), NULL));
         callersaves = callersaves->tail;
     }
 }
-static void popCallerSaves() {
+
+/* callersaves -- args(including static link) -- ret address
+ *                                            ^
+ *                                           %esp              */
+static void popCallerSaves(T_expList args) {
+    int cnt = 0;
+    while (args && args->head) {
+        cnt++;
+        args = args->tail;
+    }
+
+    char* inst = checked_malloc(80);
+    sprintf(inst, "addl $%d, %%esp\n", cnt*4);
+    emit(AS_Oper(inst, NULL, NULL, NULL));
+
     Temp_tempList callersaves = F_CallerSaves();
-    Temp_tempList reverseList = reverseTempList(callersaves);
+    Temp_tempList reverseList = Temp_reverseList(callersaves);
     while (reverseList && reverseList->head) {
-        emit(AS_Oper("pop `s0", L(F_SP(), NULL), L(reverseList->head, NULL), NULL));
+        emit(AS_Oper("pop `d0", L(reverseList->head, NULL), NULL, NULL));
         reverseList = reverseList->tail;
     }
 }
@@ -359,17 +361,20 @@ static Temp_temp munchExp(T_exp e) {
             // should all be direct call
             // TODO: callersave(push, pop)
             // TODO: should I return the rv directly?
+            Temp_temp r = Temp_newtemp();
             pushCallerSaves();
-            // Temp_temp r = Temp_newtemp();
             Temp_tempList l = munchArgs(0, e->u.CALL.args);
             Temp_tempList calldefs = L(F_RV(), F_CallerSaves());
             sprintf(inst1, "call %s\n", Temp_labelstring(e->u.CALL.fun->u.NAME));
             //sprintf(inst2, "movl `s0, `d0");
             emit(AS_Oper(inst1, calldefs, l, NULL));
-            popCallerSaves();
+
+            sprintf(inst2, "movl `s0, `d0\n");
+            emit(AS_Oper(inst2, L(r, NULL), L(F_RV(), NULL), NULL));
+            popCallerSaves(e->u.CALL.args);
             // TODO: what about the args?
             // emit(AS_Oper(inst2, L(r, NULL), L(F_RV(), NULL), NULL));
-            return F_RV();
+            return r;
         }
         case T_TEMP: {
             return e->u.TEMP;
@@ -399,7 +404,7 @@ static Temp_tempList munchArgs(int i, T_expList args) {
     Temp_tempList l = munchArgs(i+1, next);
 
     Temp_temp r = munchExp(args->head);
-    emit(AS_Oper("push `s0", L(F_SP(), NULL), L(r, NULL), NULL));
+    emit(AS_Oper("push `s0", NULL, L(r, NULL), NULL));
     return Temp_TempList(r, l);
 }
 

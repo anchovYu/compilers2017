@@ -9,6 +9,7 @@ typedef char bool;
 #define FALSE 0
 
 void *checked_malloc(int);
+void *checked_calloc(int, int);
 string String(char *);
 
 typedef struct U_boolList_ *U_boolList;
