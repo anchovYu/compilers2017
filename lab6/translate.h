@@ -50,6 +50,9 @@ Tr_exp Tr_indexVar(Tr_exp var, Tr_exp index);
 
 Tr_exp Tr_simpleVar(Tr_access access, Tr_level level);
 
+Tr_exp Tr_seq(Tr_exp left, Tr_exp right);
+Tr_exp Tr_eseq(Tr_exp left, Tr_exp right);
+
 void Tr_procEntryExit(Tr_level level, Tr_exp body);
 F_fragList Tr_getResult(void);
 

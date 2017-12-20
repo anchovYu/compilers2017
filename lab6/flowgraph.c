@@ -63,44 +63,56 @@ G_graph FG_AssemFlowGraph(AS_instrList il, F_frame f) {
     G_graph flowGraph = G_Graph();
 
     G_nodeList labels = NULL;   // a node list for putting labels
-    G_nodeList labelTmp = labels;
     G_nodeList jumps = NULL; // a node list for jump instr waiting to insert edge to target
-    G_nodeList jumpTmp = jumps;
 
     AS_instrList instrTmp = il;
     G_node currNode, lastNode = NULL;
     while (instrTmp && instrTmp->head) {
         AS_instr instr = instrTmp->head;
         currNode = G_Node(flowGraph, (void *)instr);
+        printf("current node: %d.\n", G_nodekey(currNode));
+        AS_printInstrList(stdout, AS_InstrList(instr, NULL), Temp_name());
 
-        // if last node is not jump, insert an edge
-        if (lastNode && !AS_hasJmp((AS_instr)G_nodeInfo(lastNode)))
+        // if last node is not jump or is cjump, insert an edge
+        if (lastNode &&
+            (!AS_hasJmp((AS_instr)G_nodeInfo(lastNode)) || AS_isCndJup((AS_instr)G_nodeInfo(lastNode)))) {
+            printf("add edge between from node %d to node %d.\n", G_nodekey(lastNode), G_nodekey(currNode));
             G_addEdge(lastNode, currNode);
+        }
 
         // if current node is a label, insert it into list for future use
         if (instr->kind == I_LABEL) {
-            labelTmp = G_NodeList(currNode, NULL);
-            labelTmp = labelTmp->tail;
+            printf("currnode is a label, insert it for future use.\n");
+            labels = G_NodeList(currNode, labels);
+            // labelTmp = G_NodeList(currNode, NULL);
+            // labelTmp = labelTmp->tail;
         }
 
         // if current node is jump, insert it into list to add edge when all labels are processed
         if (AS_hasJmp(instr)) {
-            jumpTmp = G_NodeList(currNode, NULL);
-            jumpTmp = jumpTmp->tail;
+            printf("currnode is a jump, insert it for future process.\n");
+            jumps = G_NodeList(currNode, jumps);
+            // jumpTmp = G_NodeList(currNode, NULL);
+            // jumpTmp = jumpTmp->tail;
         }
 
         lastNode = currNode;
         instrTmp = instrTmp->tail;
+        printf("\n\n");
+
     }
 
     // after placing all label nodes, we can add edge from jump node to lable node
-    jumpTmp = jumps;
+    G_nodeList jumpTmp = jumps;
     while (jumpTmp && jumpTmp->head) {
-        Temp_labelList jumpLabels= ((AS_instr)G_nodeInfo(lastNode))->u.OPER.jumps->labels;
+        Temp_labelList jumpLabels= ((AS_instr)G_nodeInfo(jumpTmp->head))->u.OPER.jumps->labels;
         while (jumpLabels && jumpLabels->head) {
+            printf("finding label %s for node %d.\n", S_name(jumpLabels->head),  G_nodekey(jumpTmp->head));
             G_node jumpNode = findLabelNodeInList(labels, jumpLabels->head);
-            if (jumpNode)
+            if (jumpNode) {
+                printf("add edge between from node %d to node %d.\n", G_nodekey(jumpTmp->head), G_nodekey(jumpNode));
                 G_addEdge(jumpTmp->head, jumpNode);
+            }
             // TODO: what it node == null? what to do?
             // also, it can jump to done
             jumpLabels = jumpLabels->tail;

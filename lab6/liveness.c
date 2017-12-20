@@ -19,6 +19,15 @@ Live_moveList Live_MoveList(G_node src, G_node dst, Live_moveList tail) {
 	return lm;
 }
 
+void Live_printMoveList(Live_moveList l) {
+    printf("moveList: \n");
+    while (l && l->src && l->dst) {
+        printf("node %d -> node %d\n", G_nodekey(l->src), G_nodekey(l->dst));
+        l = l->tail;
+    }
+    printf("\n");
+}
+
 static void enterLiveMap(G_table t, G_node flowNode, Temp_tempList temps) {
     G_enter(t, flowNode, temps);
 }
@@ -81,6 +90,7 @@ Live_moveList intersectMoveList(Live_moveList a, Live_moveList b) {
     while (tmp && tmp->src && tmp->dst) {
         if (Live_inMoveList(tmp->src, tmp->dst, b))
             res = Live_MoveList(tmp->src, tmp->dst, res);
+        tmp = tmp->tail;
     }
     return res;
 }
@@ -111,6 +121,16 @@ static void hackFP(G_graph g) {
     }
 }
 
+// for print in and out gtable
+void show(G_node node, Temp_tempList temps) {
+    printf("node %d: ", G_nodekey(node));
+    while(temps && temps->head) {
+        printf("%d: ", Temp_int(temps->head));
+        temps = temps->tail;
+    }
+    printf("\n");
+}
+
 struct Live_graph Live_liveness(G_graph flow) {
     G_nodeList flownodes = G_nodes(flow);
     G_nodeList flownodesTmp = NULL;
@@ -122,6 +142,7 @@ struct Live_graph Live_liveness(G_graph flow) {
     bool doneFlag = FALSE;
     while (doneFlag == FALSE) {
         doneFlag = TRUE;
+        flownodesTmp = flownodes;
         while (flownodesTmp && flownodesTmp->head) {
             G_node currnode = flownodesTmp->head;
             Temp_tempList lastIn = lookupLiveMap(livein, currnode);
@@ -131,7 +152,7 @@ struct Live_graph Live_liveness(G_graph flow) {
             Temp_tempList currIn = Temp_unionList(FG_use(currnode),
                                                   Temp_diffList(lastOut, FG_def(currnode)));
             // out[n] = in[n+1] + in[n+2].. (n+1, n+2 are succ[n])
-            Temp_tempList currOut = NULL;
+            Temp_tempList currOut = lastOut;
             G_nodeList succs = FG_succ(currnode);
             while (succs && succs->head) {
                 currOut = Temp_unionList(currOut, lookupLiveMap(livein, succs->head));
@@ -150,6 +171,19 @@ struct Live_graph Live_liveness(G_graph flow) {
         }
     }
 
+    // TODO:
+    // consider movl 102, -4(100):
+    // in codegen, we have src() 100 and dst 102..
+    // well, Done. Nothing.
+
+    // print in and out
+    // printf("----in----\n");
+    // TAB_dump(livein, &show);
+    // printf("----out----\n");
+    // TAB_dump(liveout, &show);
+
+
+
     struct Live_graph lg;
     lg.moves = NULL;
     // construct the interference graph
@@ -161,6 +195,7 @@ struct Live_graph Live_liveness(G_graph flow) {
         Temp_tempList outs = lookupLiveMap(liveout, currnode);
         Temp_tempList tmpdefs = defs;
         Temp_tempList tmpouts = outs;
+        // TODO: add interference edge between defs
         if (!FG_isMove(currnode)) {
             while (tmpdefs && tmpdefs->head) {
                 G_node def = findOrCreateNodeInTempGraph(interference, tmpdefs->head);

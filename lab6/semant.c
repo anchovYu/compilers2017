@@ -249,13 +249,18 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a, Tr_level level, Temp_
             A_expList seq = get_seqexp_seq(a);
             if (!seq)
                 return expTy(Tr_nop(), Ty_Void());
+
+            Tr_exp tr_exp = Tr_nop();
             while (seq && seq->head && seq->tail) {
-                transExp(venv, tenv, seq->head, level, breakk);
+                tr_exp = Tr_seq(tr_exp, transExp(venv, tenv, seq->head, level, breakk).exp);
                 seq = seq->tail;
             }
             // TODO: let in expseq end, the expseq can is zero or more exps.
             // but the (expseq) have two or more exps.
-            return transExp(venv, tenv, seq->head, level, breakk);
+            struct expty res = transExp(venv, tenv, seq->head, level, breakk);
+            res.exp = Tr_eseq(tr_exp, res.exp);
+            return res;
+
         }
         case A_varExp: {
             //printf("enter transExp-varExp.\n");
@@ -469,19 +474,21 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a, Tr_level level, Temp_
         }
         case A_whileExp: {
             //printf("enter transExp-whileExp.\n");
+            Temp_label done = Temp_newlabel();
 
             A_exp test = get_whileexp_test(a);
             A_exp body = get_whileexp_body(a);
             struct expty testTy = transExp(venv, tenv, test, level, breakk);
-            struct expty bodyTy = transExp(venv, tenv, body, level, breakk);
+            struct expty bodyTy = transExp(venv, tenv, body, level, done);
             if (testTy.ty->kind != Ty_int)
                 EM_error(test->pos, "(transExp-whileexp)test condition return wrong type.");
             if (bodyTy.ty->kind != Ty_void)
                 EM_error(body->pos, "while body must produce no value");
-            return expTy(Tr_while(testTy.exp, bodyTy.exp, breakk), Ty_Void());
+            return expTy(Tr_while(testTy.exp, bodyTy.exp, done), Ty_Void());
         }
         case A_forExp: {
             //printf("enter transExp-forExp.\n");
+            Temp_label done = Temp_newlabel();
 
             S_symbol var = get_forexp_var(a);
             A_exp lo = get_forexp_lo(a);
@@ -499,31 +506,36 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a, Tr_level level, Temp_
             S_beginScope(venv);
                 Tr_access loopVarAccess = Tr_allocLocal(level, TRUE);
                 S_enter(venv, var, E_ROVarEntry(loopVarAccess, loTy.ty));
-                struct expty bodyTy = transExp(venv, tenv, body, level, breakk);
+                struct expty bodyTy = transExp(venv, tenv, body, level, done);
                 if (bodyTy.ty->kind != Ty_void)
                     EM_error(body->pos, "(transExp-forExp)body must have no return values.");
             S_endScope(venv);
-            return expTy(Tr_for(loTy.exp, hiTy.exp, bodyTy.exp, Tr_simpleVar(loopVarAccess, level), breakk),
+            return expTy(Tr_for(loTy.exp, hiTy.exp, bodyTy.exp, Tr_simpleVar(loopVarAccess, level), done),
                          Ty_Void());
         }
         case A_breakExp: {
             //printf("enter transExp-breakExp.\n");
-
+            if (!breakk) {
+                EM_error(a->pos, "Break is not in a loop");
+                return expTy(Tr_nop(), Ty_Void());
+            }
             // TODO: handle break
             return expTy(Tr_break(breakk), Ty_Void());
         }
         case A_letExp: {
-            //printf("enter transExp-letExp.\n");
+            printf("enter transExp-letExp.\n");
             A_decList decList = get_letexp_decs(a);
             A_exp body = get_letexp_body(a);
 
+            Tr_exp tr_exp = Tr_nop();
             S_beginScope(venv);
             S_beginScope(tenv);
             while (decList && decList -> head) {
-                transDec(venv, tenv, decList->head, level, breakk);
+                tr_exp = Tr_seq(tr_exp, transDec(venv, tenv, decList->head, level, breakk));
                 decList = decList->tail;
             }
             struct expty bodyTy = transExp(venv, tenv, body, level, breakk);
+            bodyTy.exp = Tr_eseq(tr_exp, bodyTy.exp);
             S_endScope(tenv);
             S_endScope(venv);
             return bodyTy;
@@ -535,7 +547,7 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a, Tr_level level, Temp_
 Tr_exp transDec(S_table venv, S_table tenv, A_dec d, Tr_level level, Temp_label breakk) {
     switch (d->kind) {
         case A_varDec: {
-            //printf("enter transDec-varDec.\n");
+            printf("enter transDec-varDec.\n");
 
             A_exp init = get_vardec_init(d);
             S_symbol var = get_vardec_var(d);
@@ -642,8 +654,8 @@ Tr_exp transDec(S_table venv, S_table tenv, A_dec d, Tr_level level, Temp_label 
 
                 //TODO label?
                 Temp_label label = Temp_newlabel();
-                U_boolList l =  makeFormalEscapeList(fundec->params);
-                Tr_level cur = Tr_newLevel(level, label, U_BoolList(TRUE ,l));  // add static link in dec
+                U_boolList l = makeFormalEscapeList(fundec->params);
+                Tr_level cur = Tr_newLevel(level, label, l);
                 // while (l && l->head) {
                 //     printf("boollist:%d\n", l->head);
                 //     l = l->tail;
@@ -667,7 +679,7 @@ Tr_exp transDec(S_table venv, S_table tenv, A_dec d, Tr_level level, Temp_label 
                 Ty_ty resultTy = get_func_res(enventry);
                 Tr_level curLevel = get_func_level(enventry);
                 Tr_accessList paramsAcc = Tr_formals(curLevel);
-
+                
                 S_beginScope(venv);
                 {
                     // printf("wha\n");
@@ -676,6 +688,12 @@ Tr_exp transDec(S_table venv, S_table tenv, A_dec d, Tr_level level, Temp_label 
                     Ty_tyList t;
                     Tr_accessList a;
                     for (l = fundec->params, t = formalTys, a = paramsAcc; l; l = l->tail, t = t->tail, a = a->tail) {
+                        // if (!t)
+                        //     printf("no t\n");
+                        // else if (!a) {
+                        //     printf("no a\n");
+                        // }
+                        // printf("l: %s\n", S_name(l->head->name));
                         S_enter(venv, l->head->name, E_VarEntry(a->head, t->head));
                     }
 
@@ -783,7 +801,7 @@ F_fragList SEM_transProg(A_exp exp) {
 	//TODO LAB5: do not forget to add the main frame
     S_table tenv = E_base_tenv();
     S_table venv = E_base_venv();
-    struct expty bodyTy = transExp(venv, tenv, exp, Tr_outermost(), Temp_newlabel());
+    struct expty bodyTy = transExp(venv, tenv, exp, Tr_outermost(), NULL);
         // TODO: not knowing much about breakk
     Tr_procEntryExit(Tr_outermost(), bodyTy.exp); // call the main func
     return Tr_getResult();

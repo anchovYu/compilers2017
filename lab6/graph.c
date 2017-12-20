@@ -80,6 +80,7 @@ void G_addEdge(G_node from, G_node to) {
 }
 
 void G_biAddEdge(G_node a, G_node b) {
+    if (a == b) return;
     G_addEdge(a, b);
     G_addEdge(b, a);
 }
@@ -126,7 +127,7 @@ static int inDegree(G_node n) {
 }
 
 /* return length of successor list for node n */
-static int outDegree(G_node n) {
+int G_outDegree(G_node n) {
     int deg = 0;
     G_nodeList p;
     for(p = G_succ(n); p != NULL; p = p->tail)
@@ -135,7 +136,7 @@ static int outDegree(G_node n) {
 }
 
 int G_degree(G_node n) {
-    return inDegree(n) + outDegree(n);
+    return inDegree(n) + G_outDegree(n);
 }
 
 /* put list b at the back of list a and return the concatenated list */
@@ -233,7 +234,7 @@ void removeFromNodeList(G_nodeList* nodes, G_node node) {
         last = tmp;
         tmp = tmp->tail;
     }
-    printf("Node is not in the nodelist, nothing to remove.\n");
+    printf("Node %d is not in the nodelist, nothing to remove.\n", G_nodekey(node));
 }
 
 /* a + b, deduplicate */

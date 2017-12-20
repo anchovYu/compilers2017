@@ -71,7 +71,8 @@ S_table E_base_venv(void) {
     //basic func: flush
     label = Temp_namedlabel("flush");
     formals = NULL;
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("flush");
     formalTys = NULL;
     resultTy = Ty_Void();
@@ -80,7 +81,8 @@ S_table E_base_venv(void) {
     //basic func: exit
     label = Temp_namedlabel("exit");
     formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("exit");
     formalTys = Ty_TyList(Ty_Int(), NULL);
     resultTy = Ty_Void();
@@ -89,7 +91,8 @@ S_table E_base_venv(void) {
     //basic func: not
     label = Temp_namedlabel("not");
     formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("not");
     formalTys = Ty_TyList(Ty_Int(), NULL);
     resultTy = Ty_Int();
@@ -98,7 +101,8 @@ S_table E_base_venv(void) {
     //basic func: chr
     label = Temp_namedlabel("chr");
     formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("chr");
     formalTys = Ty_TyList(Ty_Int(), NULL);
     resultTy = Ty_String();
@@ -107,7 +111,8 @@ S_table E_base_venv(void) {
     //basic func: getchar
     label = Temp_namedlabel("getchar");
     formals = NULL;
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("getchar");
     formalTys = NULL;
     resultTy = Ty_String();
@@ -116,7 +121,8 @@ S_table E_base_venv(void) {
     //basic func: print
     label = Temp_namedlabel("print");
     formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("print");
     formalTys = Ty_TyList(Ty_String(), NULL);
     resultTy = Ty_Void();
@@ -125,7 +131,8 @@ S_table E_base_venv(void) {
     //basic func: printi
     label = Temp_namedlabel("printi");
     formals = U_BoolList(TRUE, NULL);
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("printi");
     formalTys = Ty_TyList(Ty_Int(), NULL);
     resultTy = Ty_Void();
@@ -134,7 +141,8 @@ S_table E_base_venv(void) {
     //basic func: ord
     label = Temp_namedlabel("ord");
     formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("ord");
     formalTys = Ty_TyList(Ty_String(), NULL);
     resultTy = Ty_Int();
@@ -143,7 +151,8 @@ S_table E_base_venv(void) {
     //basic func: size
     label = Temp_namedlabel("size");
     formals = U_BoolList(TRUE, NULL);   //TODO: assume all params escape
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("size");
     formalTys = Ty_TyList(Ty_String(), NULL);
     resultTy = Ty_Int();
@@ -152,7 +161,8 @@ S_table E_base_venv(void) {
     //basic func: concat
     label = Temp_namedlabel("concat");
     formals = U_BoolList(TRUE, U_BoolList(TRUE, NULL));   //TODO: assume all params escape
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("concat");
     formalTys = Ty_TyList(Ty_String(), Ty_TyList(Ty_String(), NULL));
     resultTy = Ty_String();
@@ -161,7 +171,8 @@ S_table E_base_venv(void) {
     //basic func: substring
     label = Temp_namedlabel("substrings");
     formals = U_BoolList(TRUE, U_BoolList(TRUE, U_BoolList(TRUE, NULL)));   //TODO: assume all params escape
-    level = Tr_newLevel(parent, label, formals);
+    level = NULL;
+    //level = Tr_newLevel(parent, label, formals);
     funcname = S_Symbol("substring");
     formalTys = Ty_TyList(Ty_String(), Ty_TyList(Ty_Int(), Ty_TyList(Ty_Int(), NULL)));
     resultTy = Ty_String();

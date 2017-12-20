@@ -12,6 +12,7 @@
 #include "regalloc.h"
 #include "table.h"
 #include "flowgraph.h"
+#include "string.h"
 
 // Note: no fp or sp for register allocation
 // TODO: instrs for allocation should not contain ebp or esp
@@ -141,10 +142,10 @@ void build(struct Live_graph liveGraph) {
     // make graph representation, initialize alias
     nodes = G_nodes(interferenceGraph);
     while(nodes && nodes->head) {
-        G_nodeList adjs = G_adj(nodes->head);
+        G_nodeList adjs = G_succ(nodes->head);
         G_batchAddAdjSet(adjSet, nodes->head, adjs, nodecnt);
         G_enter(adjList, nodes->head, adjs);
-        G_enter(degree, nodes->head, (void *)G_degree(nodes->head));
+        G_enter(degree, nodes->head, (void *)G_outDegree(nodes->head));
         G_enter(alias, nodes->head, nodes->head);
         nodes = nodes->tail;
     }
@@ -165,27 +166,36 @@ void addEdge(G_node a, G_node b) {
         if (!G_inNodeList(a, precolored)) {
             G_nodeList aAdjList = (G_nodeList)G_look(adjList, a);
             G_enter(adjList, a, G_NodeList(b, aAdjList));
+            G_enter(degree, a, (void *)((int)G_look(degree, a) + 1));
         }
         if (!G_inNodeList(b, precolored)) {
             G_nodeList bAdjList = (G_nodeList)G_look(adjList, b);
             G_enter(adjList, b, G_NodeList(a, bAdjList));
+            G_enter(degree, b, (void *)((int)G_look(degree, b) + 1));
         }
-        G_enter(degree, a, (void *)((int)G_look(degree, a) + 1));
-        G_enter(degree, b, (void *)((int)G_look(degree, b) + 1));
+    } else {
+        printf("addEdge: node %d and node %d are already connected.\n", G_nodekey(a), G_nodekey(b));
     }
 }
 
 /* func: makeWorklist
  * description: initialize spill, freeze, simplify worklist. */
 void makeWorklist() {
+    printf("makeWorklist: entry.\n");
     G_nodeList ini = initial;
     while (ini && ini->head) {
-        if ((int)G_look(degree, ini->head) >= K)
+        if ((int)G_look(degree, ini->head) >= K) {
+            printf("moving node %d from initial to spillWorklist.\n", G_nodekey(ini->head));
             spillWorklist = G_NodeList(ini->head, spillWorklist);
-        else if (moverelated(ini->head))
+        }
+        else if (moverelated(ini->head)) {
+            printf("moving node %d from initial to freezeWorklist.\n", G_nodekey(ini->head));
             freezeWorklist = G_NodeList(ini->head, freezeWorklist);
-        else
+        }
+        else {
+            printf("moving node %d from initial to simplifyWorklist.\n", G_nodekey(ini->head));
             simplifyWorklist = G_NodeList(ini->head, simplifyWorklist);
+        }
         ini = ini->tail;
     }
     initial = NULL;
@@ -203,6 +213,7 @@ bool moverelated(G_node node) {
 /* func: simplify
  * description: simplify a node in simplifyWorklist. */
 void simplify() {
+    printf("simplify: entry.\n");
     if (!simplifyWorklist)
         return;
     G_node node = simplifyWorklist->head;
@@ -211,8 +222,12 @@ void simplify() {
     G_nodeList adjs = adjacent(node);
     while (adjs && adjs->head) {
         decrementDegree(adjs->head);
+        printf("simplify: decrement degree for node %d 's neighbour %d.\n", G_nodekey(node), G_nodekey(adjs->head));
+        printf("simplify: current degree for non-precolored node %d: %d\n", G_nodekey(adjs->head), (int)G_look(degree, adjs->head));
         adjs = adjs->tail;
     }
+    printf("simplify: finish simplify node %d, leaving.\n", G_nodekey(node));
+
 }
 
 G_nodeList adjacent(G_node node) {
@@ -240,7 +255,8 @@ G_node pop() {
 void decrementDegree(G_node node) {
     int prevDegree = (int)G_look(degree, node);
     G_enter(degree, node, (void *)(prevDegree-1));
-    if (prevDegree == K) {
+    if (!G_inNodeList(node, precolored) && G_inNodeList(node, spillWorklist) && prevDegree == K) {
+        printf("decrementDegree: have to move node %d from spillWorklist\n", G_nodekey(node));
         enableMoves(G_NodeList(node, adjacent(node)));
         removeFromNodeList(&spillWorklist, node);
         if (moverelated(node))
@@ -267,10 +283,13 @@ void enableMoves(G_nodeList nodes) {
 /* func: coalesce
  * description: coalesce a potential coalescable move in worklistMoves. */
 void coalesce() {
+    printf("coalesce: entry.\n");
+
     if (!worklistMoves)
         return;
     G_node src = worklistMoves->src;
     G_node dst = worklistMoves->dst;
+
     G_node x = getAlias(src);
     G_node y = getAlias(dst);
     G_node u, v;
@@ -282,16 +301,21 @@ void coalesce() {
         v = y;
     }
     worklistMoves = worklistMoves->tail;
+    printf("coalesce: choose mov node %d -> node %d to coalesce.\n", G_nodekey(src), G_nodekey(dst));
+    printf("          that is mov node %d -> node %d to coalesce.\n", G_nodekey(u), G_nodekey(v));
 
     if (u == v) {
+        printf("coalesce: the move has been coalesced.\n");
         coalescedMoves = Live_MoveList(src, dst, coalescedMoves);
         addWorkList(u);
     } else if (G_inNodeList(v, precolored) ||
                G_inAdjSet(adjSet, G_nodekey(u), G_nodekey(v), nodecnt)) {
+        printf("coalesce: the move is constrained.\n");
         constrainedMoves = Live_MoveList(src, dst, constrainedMoves);
         addWorkList(u);
         addWorkList(v);
     } else if (G_inNodeList(u, precolored)) {
+        printf("coalesce: one node is precolored, using George.\n");
         bool flag = TRUE;
         G_nodeList adjs = adjacent(v);
         while (adjs && adjs->head) {
@@ -300,12 +324,16 @@ void coalesce() {
             adjs = adjs->tail;
         }
         if (flag) {
+            printf("coalesce: coalesced the move.\n");
             coalescedMoves = Live_MoveList(src, dst, coalescedMoves);
             combine(u, v);
             addWorkList(u);
-        } else
+        } else {
+            printf("coalesce: cannot coalesce the move.\n");
             activeMoves = Live_MoveList(src, dst, activeMoves);
+        }
     } else {
+        printf("coalesce: both node are non-precolored, using Briggs.\n");
         if (conservative(unionNodeList(adjacent(u), adjacent(v)))) {
             coalescedMoves = Live_MoveList(src, dst, coalescedMoves);
             combine(u, v);
@@ -313,6 +341,8 @@ void coalesce() {
         } else
             activeMoves = Live_MoveList(src, dst, activeMoves);
     }
+    printf("coalesce: leaving.\n");
+
 }
 
 // move node from freezeWorklist to simplifyWorklist
@@ -327,8 +357,8 @@ void addWorkList(G_node node) {
 // George
 // r is precolored
 bool OK(G_node t, G_node r) {
-    return (((int)G_look(degree, t) < K) ||
-            G_inNodeList(t, precolored)  ||
+    return (G_inNodeList(t, precolored)  ||
+            ((int)G_look(degree, t) < K) ||
             G_inAdjSet(adjSet, G_nodekey(t), G_nodekey(r), nodecnt));
 }
 
@@ -337,7 +367,8 @@ bool conservative(G_nodeList nodes) {
     G_nodeList nodeList = nodes;
     int cnt = 0;
     while(nodeList && nodeList->head) {
-        if ((int)G_look(degree, nodeList->head) >= K)
+        if (G_inNodeList(nodeList->head, precolored) ||
+            (int)G_look(degree, nodeList->head) >= K)
             cnt++;
         nodeList = nodeList->tail;
     }
@@ -359,10 +390,13 @@ G_node getAlias(G_node node) {
 // add moves and adjacent of v to u
 // update status of u
 void combine(G_node u, G_node v) {
-    if (G_inNodeList(v, freezeWorklist))
+    if (G_inNodeList(v, freezeWorklist)) {
         removeFromNodeList(&freezeWorklist, v);
-    else
+    }
+    else {
+        printf("combine: remove node %d from spillworklist.\n", G_nodekey(v));
         removeFromNodeList(&spillWorklist, v);
+    }
     coalescedNodes = G_NodeList(v, coalescedNodes);
     G_enter(alias, v, u);
 
@@ -372,12 +406,14 @@ void combine(G_node u, G_node v) {
 
     G_nodeList adjs = adjacent(v);
     while (adjs && adjs->head) {
+        printf("combine: add edge between node %d and node %d.\n", G_nodekey(adjs->head), G_nodekey(u));
         addEdge(adjs->head, u);
         decrementDegree(adjs->head);
         adjs = adjs->tail;
     }
 
-    if (((int)G_look(degree, u) >= K) && G_inNodeList(u, freezeWorklist)) {
+    if (G_inNodeList(u, freezeWorklist) && ((int)G_look(degree, u) >= K)) {
+        printf("combine: move node %d from freezeWorklist to spillworklist.\n", G_nodekey(v));
         removeFromNodeList(&freezeWorklist, u);
         spillWorklist = G_NodeList(u, spillWorklist);
     }
@@ -397,8 +433,12 @@ void freeze() {
 // freeze any move related to the node.
 // if result in some node not move-related any more, update their status
 void freezeMoves(G_node u) {
+
     Live_moveList moveList = nodeMoves(u);
+    printf("freezeMOVES enter here.\n");
+
     while (moveList && moveList->src && moveList->dst) {
+
         G_node v;
         if (getAlias(moveList->dst) == getAlias(u))
             v = getAlias(moveList->src);
@@ -408,7 +448,7 @@ void freezeMoves(G_node u) {
         findAndRemoveFromMoveList(moveList->src, moveList->dst, &activeMoves);
         frozenMoves = Live_MoveList(moveList->src, moveList->dst, frozenMoves);
 
-        if (!moverelated(v) && ((int)G_look(degree, v) < K)) {
+        if (!moverelated(v) && !(G_inNodeList(v, precolored)) && ((int)G_look(degree, v) < K)) {
             removeFromNodeList(&freezeWorklist, v);
             simplifyWorklist = G_NodeList(v, simplifyWorklist);
         }
@@ -426,20 +466,32 @@ void selectSpill() {
     spillWorklist = spillWorklist->tail;
     simplifyWorklist = G_NodeList(node, simplifyWorklist);
     freezeMoves(node);
+    printf("selectSpill: select node %d to spill. leaving.\n", G_nodekey(node));
 }
 
 /* func: assignColors
  * description: assign colors for the interference graph,
                 generating spilledNodes. */
 Temp_map assignColors() {
-    Temp_map temp_map = Temp_empty();
+    Temp_map temp_map = F_initialTempMap();
     while (selectStack) {
         G_node node = pop();
-        int okColors[K] = {1};
+        int okColors[K];
+        int j;
+        for (j = 0; j < K; j++) {
+            okColors[j] = 1;
+        }
         G_nodeList adjs = (G_nodeList)G_look(adjList, node);
         while (adjs && adjs->head) {
             if (G_inNodeList(getAlias(adjs->head), unionNodeList(coloredNodes, precolored))) {
+                printf("\tnode %d: its neighbour node %d is colored by %d(%s).\n", G_nodekey(node), G_nodekey(adjs->head), (int)G_look(color, getAlias(adjs->head)), registers[(int)G_look(color, getAlias(adjs->head))]);
                 okColors[(int)G_look(color, getAlias(adjs->head))] = 0;
+                printf("\tokColors[]: ");
+                int i;
+                for (i = 0; i < K; i++) {
+                    printf("%d ", okColors[i]);
+                }
+                printf("\n");
             }
             adjs = adjs->tail;
         }
@@ -451,10 +503,12 @@ Temp_map assignColors() {
                 G_enter(color, node, (void *)i);
                 Temp_enter(temp_map, (Temp_temp)G_nodeInfo(node), registers[i]);
                 flag = TRUE;
+                printf("assignColors: find color %d(%s) for node %d.\n", i, registers[i], G_nodekey(node));
                 break;
             }
         }
         if (flag == FALSE) {
+            printf("assignColors: cannot find color for node %d, thus spilling.\n", G_nodekey(node));
             spilledNodes = G_NodeList(node, spilledNodes);
         }
     }
@@ -463,6 +517,7 @@ Temp_map assignColors() {
         int color_num = (int)G_look(color, getAlias(coalesced->head));
         G_enter(color, coalesced->head, (void *)color_num);
         Temp_enter(temp_map, (Temp_temp)G_nodeInfo(coalesced->head), registers[color_num]);
+        printf("assignColors: find color %d(%s) for coalesced node %d.\n", color_num, registers[color_num], G_nodekey(coalesced->head));
 
         coalesced = coalesced->tail;
     }
@@ -540,38 +595,70 @@ void replaceDefTemp(AS_instr* instr, Temp_temp oldtemp, Temp_temp newtemp) {
          @f, frame to alloc for spill nodes
  * description: rewrite the instrList given spilled nodes. */
 void rewriteProgram(AS_instrList* il, F_frame f) {
-    char* inst1 = checked_malloc(80);
-    char* inst2 = checked_malloc(80);
     G_nodeList nodes = spilledNodes;
+    int offset;
     while (nodes && nodes->head) {
+        char* inst1 = checked_malloc(80);
+        char* inst2 = checked_malloc(80);
         G_node node = nodes->head;
         Temp_temp oldtemp = (Temp_temp)G_nodeInfo(node);
         AS_instrList instrs = *il;
         AS_instrList last = NULL;
-        int offset = F_allocSpill(f);
+        offset = F_allocSpill(f);
+        //printf("rewriteProgram: spill offset %d for node %d.\n", offset, G_nodekey(node));
         while (instrs && instrs->head) {
             if (Temp_tempInList(getUse(instrs->head), oldtemp)) {
+                //printf("rewriteProgram: use of the node %d, set offset: %d\n", G_nodekey(node), offset);
                 Temp_temp r = Temp_newtemp();
-                sprintf(inst1, "movl $%d(`s0), `d0\n", offset);
+                sprintf(inst1, "movl %d(`s0), `d0\n", offset);
+                //printf("%s", inst1);
                 AS_instr loadinstr = AS_Oper(inst1, Temp_TempList(r, NULL), Temp_TempList(F_FP(), NULL), NULL);
                 replaceUseTemp(&(instrs->head), oldtemp, r);
                 if (!last)
                     *il = AS_InstrList(loadinstr, *il);
                 else
                     last->tail = AS_InstrList(loadinstr, instrs);
+                //AS_printInstrList(stdout, *il, Temp_layerMap(F_tempMap, Temp_name()));
             }
 
             if (Temp_tempInList(getDef(instrs->head), oldtemp)) {
+                //printf("rewriteProgram: def of the node %d, set offset: %d\n", G_nodekey(node), offset);
                 Temp_temp r = Temp_newtemp();
-                sprintf(inst2, "movl `s0, $%d(`d0)\n", offset);
-                AS_instr storeinstr = AS_Oper(inst2, Temp_TempList(F_FP(), NULL), Temp_TempList(r, NULL), NULL);
+                sprintf(inst2, "movl `s0, %d(`s1)\n", offset);
+                //printf("%s", inst2);
+                AS_instr storeinstr = AS_Oper(inst2, NULL, Temp_TempList(r, Temp_TempList(F_FP(), NULL)), NULL);
                 replaceDefTemp(&(instrs->head), oldtemp, r);
                 instrs->tail = AS_InstrList(storeinstr, instrs->tail);
+                //AS_printInstrList(stdout, *il, Temp_layerMap(F_tempMap, Temp_name()));
             }
             last = instrs;
             instrs = instrs->tail;
         }
+        //AS_printInstrList(stdout, *il, Temp_layerMap(F_tempMap, Temp_name()));
         nodes = nodes->tail;
+    }
+    printf("\n\nrewriteProgram: instrs after rewrite: \n");
+    AS_printInstrList(stdout, *il, Temp_layerMap(F_tempMap, Temp_name()));
+
+}
+
+void removeRedundantMoves(AS_instrList* il, Temp_map coloring) {
+    AS_instrList instrs = *il;
+    AS_instrList last = NULL;
+    while (instrs && instrs->head) {
+        AS_instr instr = instrs->head;
+        if (instr->kind == I_MOVE &&
+            !strcmp(Temp_look(coloring, instr->u.MOVE.dst->head),
+                    Temp_look(coloring, instr->u.MOVE.src->head))) {
+            if (!last)
+                *il = (*il)->tail;
+            else
+                last->tail = instrs->tail;
+            // should remove
+        } else
+            last = instrs;
+
+        instrs = instrs->tail;
     }
 }
 
@@ -582,28 +669,49 @@ struct RA_result RA_regAlloc(F_frame f, AS_instrList il) {
     int flag = FALSE;
     while (!flag) {
         // liveness analysis, Build
+        printf("-==========================-\nstart a new round of regalloc.\n");
+
+        printf("instrs in the beginning of the turn:\n");
+        AS_printInstrList(stdout, instrList, Temp_layerMap(F_tempMap, Temp_name()));
+
         G_graph flowGraph = FG_AssemFlowGraph(instrList, f);
         struct Live_graph liveGraph = Live_liveness(flowGraph);
 
         build(liveGraph);
         makeWorklist();
+
         while (simplifyWorklist || worklistMoves || freezeWorklist || spillWorklist) {
-            if (simplifyWorklist)
+            if (simplifyWorklist) {
+                printf("simplifying..\n");
                 simplify();
-            else if (worklistMoves)
+            }
+            else if (worklistMoves) {
+                printf("coalescing..\n");
                 coalesce();
-            else if (freezeWorklist)
+            }
+            else if (freezeWorklist) {
+                printf("freezing..\n");
                 freeze();
-            else if (spillWorklist)
+            }
+            else if (spillWorklist) {
+                printf("selectSpilling..\n");
                 selectSpill();
+            }
         }
 
+        printf("assigning colors..\n");
         coloring = assignColors();
 
-        if (spilledNodes)
+        if (spilledNodes) {
+            printf("have spilled nodes, rewriting instrs..\n");
             rewriteProgram(&instrList, f);
-        else
+            //flag = TRUE;
+        }
+        else {
+            printf("no spilled nodes, finish.\n");
             flag = TRUE;
+            removeRedundantMoves(&instrList, coloring);
+        }
     }
 
 	struct RA_result ret;

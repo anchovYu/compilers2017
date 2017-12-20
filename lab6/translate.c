@@ -157,24 +157,23 @@ static struct Cx unCx(Tr_exp e) {
 
 
 
-// TODO
-Tr_level outermost;
+static Tr_level outermost;
 Tr_level Tr_outermost(void) {
-    if (outermost)
-        return outermost;
-    else {
-        outermost = Tr_newLevel(NULL, Temp_newlabel(), NULL);
-        return outermost;
-    }
+    if (!outermost)
+        outermost = Tr_newLevel(NULL, Temp_namedlabel("tigermain"), NULL);
+    return outermost;
 }
+
 Tr_level Tr_newLevel(Tr_level parent, Temp_label name, U_boolList formals) {
     Tr_level p = (Tr_level)checked_malloc(sizeof *p);
-    p->frame = F_newFrame(name, formals);
+    p->frame = F_newFrame(name, U_BoolList(TRUE, formals)); // add static link in dec
     p->parent = parent;
     return p;
 }
+
 Tr_accessList makeTrAccList(Tr_level level, F_accessList f_accList) {
     // note the order.
+    // does not include static link!!! peel off.
     Tr_accessList res = NULL;
     F_accessList accList = f_accList;
     if (accList && accList->head) {
@@ -189,19 +188,22 @@ Tr_accessList makeTrAccList(Tr_level level, F_accessList f_accList) {
         temp = temp->tail;
         accList = accList->tail;
     }
+    if (res) res = res->tail;
     return res;
 }
 
 Tr_accessList Tr_formals(Tr_level level) {
     F_accessList f_acclist = F_formals(level->frame);
+    // should not contain static link.
+    // Note: static link is peeled off in func makeTrAccList.
     return makeTrAccList(level, f_acclist);
-
 }
+
 Tr_access Tr_allocLocal(Tr_level level, bool escape) {
+    printf("enter Tr_allocLocal.\n");
     F_access f_acc = F_allocLocal(level->frame, escape);
     return Tr_Access(level, f_acc);
 }
-
 
 
 static T_exp makeStaticLink(Tr_level cur, Tr_level need) {
@@ -230,7 +232,6 @@ Tr_exp Tr_Int(int i) {
 
 Tr_exp Tr_String(string str) {
     Temp_label lab = Temp_newlabel();
-    // TODO: fragments???
     //printf("\tadd string fragment: %s\n", str);
     fragList = F_FragList(F_StringFrag(lab, str), fragList);
     return Tr_Ex(T_Name(lab));
@@ -244,26 +245,27 @@ Tr_exp Tr_Call(Temp_label func, Tr_expList inParams, Tr_level caller, Tr_level c
         params = T_ExpList(unEx(tr_expList->head), params);
         tr_expList = tr_expList->tail;
     }
-    T_exp sl = makeStaticLink(caller, callee->parent);
-    return Tr_Ex(T_Call(T_Name(func), T_ExpList(sl, params)));
+    if (!callee) {
+        // externalcall
+        return Tr_Ex(T_Call(T_Name(func), params));
+    } else {
+        T_exp sl = makeStaticLink(caller, callee->parent);
+        return Tr_Ex(T_Call(T_Name(func), T_ExpList(sl, params)));
+    }
 }
 
 Tr_exp Tr_Op(A_oper oper, Tr_exp left, Tr_exp right) {
     T_exp l = unEx(left);
     T_exp r = unEx(right);
     switch (oper) {
-        case A_plusOp: {
+        case A_plusOp:
             return Tr_Ex(T_Binop(T_plus, l, r));
-        }
-        case A_minusOp: {
+        case A_minusOp:
             return Tr_Ex(T_Binop(T_minus, l, r));
-        }
-        case A_timesOp: {
+        case A_timesOp:
             return Tr_Ex(T_Binop(T_mul, l, r));
-        }
-        case A_divideOp: {
+        case A_divideOp:
             return Tr_Ex(T_Binop(T_div, l, r));
-        }
         default: return NULL; // TODO
     }
 }
@@ -328,7 +330,39 @@ Tr_exp Tr_OpCom(A_oper oper, Tr_exp left, Tr_exp right, bool isString) {
 
 }
 
+static T_stm assign_field(Temp_temp r, int num, Tr_expList fields)
+{
+    if (fields) {
+        return T_Seq(T_Move(T_Mem(T_Binop(T_plus, T_Temp(r), T_Const(F_wordSize * num))), unEx(fields->head)),
+                assign_field(r, num - 1, fields->tail));
+    } else {
+        return T_Exp(T_Const(0));
+    }
+}
+
+Tr_exp Tr_Record(int num, Tr_expList fields)
+{
+    Temp_temp r = Temp_newtemp();
+    /*
+    T_Move(T_Temp(r), F_externalCall("Malloc", T_ExpList(T_Const(F_wordSize * num)), NULL))
+    assign_field(r, 0, fields)
+    T_Temp(r)
+    */
+    return Tr_Ex(T_Eseq(T_Move(T_Temp(r), F_externalCall("allocRecord", T_ExpList(T_Const(F_wordSize * num), NULL))),
+                T_Eseq(assign_field(r, num - 1, fields),
+                    T_Temp(r))));
+}
+
+
 Tr_exp Tr_record(Tr_expList fields) {
+    // Tr_expList tr_expList = fields;
+    // int cnt = 0;
+    // while (tr_expList && tr_expList->head) {
+    //     cnt++;
+    //     tr_expList = tr_expList->tail;
+    // }
+    // return Tr_Record(cnt,fields);
+    //
     /* mov malloc addr to reg r
      * mov r to a
      * mov field to mem(a)
@@ -336,17 +370,6 @@ Tr_exp Tr_record(Tr_expList fields) {
      * ...
      * r */
     //printf("\tenter Tr_record\n");
-    Temp_temp r = Temp_newtemp();
-    Temp_temp a = Temp_newtemp();
-    T_exp res = T_Eseq(NULL, NULL);
-    T_exp tmp = res;
-
-    tmp->u.ESEQ.exp = T_Eseq(NULL, NULL);
-    tmp = tmp->u.ESEQ.exp;
-
-    tmp->u.ESEQ.stm = T_Move(T_Temp(a), T_Temp(r));
-    tmp->u.ESEQ.exp = T_Eseq(NULL, NULL);
-    tmp = tmp->u.ESEQ.exp;
 
     // TODO: now the order maybe right
     T_expList params = NULL;
@@ -358,20 +381,21 @@ Tr_exp Tr_record(Tr_expList fields) {
         tr_expList = tr_expList->tail;
     }
     // TODO: alloc
-    res->u.ESEQ.stm = T_Move(T_Temp(r), F_externalCall("malloc", T_ExpList(T_Binop(T_minus, T_Const(cnt), T_Const(F_wordSize)), NULL)));
 
-
+    Temp_temp r = Temp_newtemp();
+    T_stm seq = T_Exp(T_Const(0));
+    int index = 0;
     while (params && params->head) {
-        tmp->u.ESEQ.stm = T_Move(T_Mem(T_Temp(a)), params->head);
-        tmp->u.ESEQ.exp = T_Eseq(NULL, NULL);
-        tmp = tmp->u.ESEQ.exp;
+        seq = T_Seq(T_Move(T_Mem(T_Binop(T_plus, T_Temp(r), T_Const(index * F_wordSize))),
+                           params->head),
+                    seq);
+        index++;
         params = params->tail;
     }
 
-    // TODO: awkward, get one more T_eseq. like this seq(a, seq(null, null)) => seq(a, useful)
-    tmp->u.ESEQ.stm = T_Exp(T_Temp(r));
-    tmp->u.ESEQ.exp = T_Temp(r);
-
+    T_exp res = T_Eseq(T_Move(T_Temp(r), F_externalCall("malloc", T_ExpList(T_Const(cnt * F_wordSize), NULL))),
+                    T_Eseq(seq,
+                            T_Temp(r)));
     return Tr_Ex(res);
 }
 
@@ -481,7 +505,6 @@ Tr_exp Tr_for(Tr_exp lo, Tr_exp hi, Tr_exp body, Tr_exp loopVar, Temp_label brea
 }
 
 Tr_exp Tr_break(Temp_label breakk) {
-    // TODO: break handling.
     return Tr_Nx(T_Jump(T_Name(breakk), Temp_LabelList(breakk, NULL)));
 }
 
@@ -495,15 +518,26 @@ Tr_exp Tr_indexVar(Tr_exp var, Tr_exp index) {
 
 // turn an var(@access) used in @level to a Tr_exp
 Tr_exp Tr_simpleVar(Tr_access access, Tr_level level) {
-    if (access->level == level)
+    if (access->level == level) {
+        printf("Tr_simpleVar: in the same level, no need for static link.\n");
         return Tr_Ex(F_Exp(access->access, T_Temp(F_FP())));
-    else
+    }
+    else {
+        printf("Tr_simpleVar: using static link to access var.\n");
         return Tr_Ex(F_Exp(access->access, makeStaticLink(level, access->level)));
+    }
+}
+
+Tr_exp Tr_seq(Tr_exp left, Tr_exp right) {
+    return Tr_Nx(T_Seq(unNx(left), unNx(right)));
+}
+
+Tr_exp Tr_eseq(Tr_exp left, Tr_exp right) {
+    return Tr_Ex(T_Eseq(unNx(left), unEx(right)));
 }
 
 // move body result to rv
 void Tr_procEntryExit(Tr_level level, Tr_exp body) {
-    //printf("\tadd prog fragment\n");
     T_stm stm = T_Move(T_Temp(F_RV()), unEx(body));
     fragList = F_FragList(F_ProcFrag(stm, level->frame), fragList);
     return;

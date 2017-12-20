@@ -55,6 +55,21 @@ bool AS_hasJmp(AS_instr i) {
     return FALSE;
 }
 
+// whether a instr is cjump
+bool AS_isCndJup(AS_instr i) {
+    if (i->kind == I_OPER && i->u.OPER.jumps) {
+        char* assem = i->u.OPER.assem;
+        char assem_cp[strlen(assem) + 1];
+        strcpy(assem_cp, assem);
+        assem_cp[3] = '\0';
+        if (strcmp(assem_cp, "jmp"))
+            return TRUE;
+    }
+    return FALSE;
+
+}
+
+
 
 AS_instrList AS_InstrList(AS_instr head, AS_instrList tail)
 {AS_instrList p = (AS_instrList) checked_malloc (sizeof *p);

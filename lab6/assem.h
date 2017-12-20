@@ -24,6 +24,7 @@ AS_instr AS_Move(string a, Temp_tempList d, Temp_tempList s);
 
 // whether a instr is jump or cjump
 bool AS_hasJmp(AS_instr i);
+bool AS_isCndJup(AS_instr i);
 
 void AS_print(FILE *out, AS_instr i, Temp_map m);
 
