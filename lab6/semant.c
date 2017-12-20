@@ -504,7 +504,7 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a, Tr_level level, Temp_
                 //return expTy(NULL, Ty_Void()); continue running !
 
             S_beginScope(venv);
-                Tr_access loopVarAccess = Tr_allocLocal(level, TRUE);
+                Tr_access loopVarAccess = Tr_allocLocal(level, a->u.forr.escape);
                 S_enter(venv, var, E_ROVarEntry(loopVarAccess, loTy.ty));
                 struct expty bodyTy = transExp(venv, tenv, body, level, done);
                 if (bodyTy.ty->kind != Ty_void)
@@ -679,7 +679,7 @@ Tr_exp transDec(S_table venv, S_table tenv, A_dec d, Tr_level level, Temp_label 
                 Ty_ty resultTy = get_func_res(enventry);
                 Tr_level curLevel = get_func_level(enventry);
                 Tr_accessList paramsAcc = Tr_formals(curLevel);
-                
+
                 S_beginScope(venv);
                 {
                     // printf("wha\n");

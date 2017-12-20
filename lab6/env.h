@@ -12,7 +12,7 @@ typedef struct E_enventry_ *E_enventry;
 struct E_enventry_ {
 	enum {E_varEntry, E_funEntry} kind;
 	int readonly; //for loop var
-	union 
+	union
 	{
 		struct {Tr_access access; Ty_ty ty;} var;
 		struct {Tr_level level; Temp_label label; Ty_tyList formals; Ty_ty result;} fun;
@@ -25,5 +25,15 @@ E_enventry E_FunEntry(Tr_level level, Temp_label label, Ty_tyList formals, Ty_ty
 
 S_table E_base_tenv(void);
 S_table E_base_venv(void);
+
+
+typedef struct E_escapeentry_ *E_escapeentry;
+
+struct E_escapeentry_ {
+    int depth;
+    bool* escape;
+};
+
+E_escapeentry E_Escapeentry(int d, bool* e);
 
 #endif

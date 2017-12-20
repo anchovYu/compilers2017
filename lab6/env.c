@@ -35,6 +35,15 @@ E_enventry E_FunEntry(Tr_level level, Temp_label label, Ty_tyList formals, Ty_ty
 	return entry;
 }
 
+E_escapeentry E_Escapeentry(int d, bool* e) {
+    E_escapeentry entry = checked_malloc(sizeof(*entry));
+
+    entry->depth = d;
+    entry->escape = e;
+    return entry;
+}
+
+
 //sym->value
 //type_id(name, S_symbol) -> type (Ty_ty)
 S_table E_base_tenv(void) {

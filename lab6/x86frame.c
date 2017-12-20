@@ -67,7 +67,7 @@ F_frame F_newFrame(Temp_label name, U_boolList formals) {
     // formals starts from %ebp + 8 (including static link)
     int offset = 8;
     U_boolList tmp = formals;
-    while (tmp && tmp->head) {
+    while (tmp != NULL) {
         accList = F_AccessList(InFrame(offset), accList);
         offset += 4;
         tmp = tmp->tail;
